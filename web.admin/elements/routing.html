@@ -1,0 +1,36 @@
+<script src="../../bower_components/page/page.js"></script>
+<script>
+    PubSub.subscribe('App.ready', function () {
+        loadPagejs();
+    });
+
+    function loadPagejs(){
+        // Middleware
+        function scrollToTop(ctx, next) {
+            if (app)
+                app.scrollPageToTop();
+            next();
+        }
+
+        // Routes
+        page('/', function () {
+            page.redirect('/pos-users');
+        });
+
+        page('/pos-users', scrollToTop, function () {
+            app.route = '/pos-users';
+            PubSub.publish('neonpages.POSUserManager');
+        });
+
+        page('/account', scrollToTop, function () {
+            app.route = '/account';
+            PubSub.publish('neonpages.Account');
+        });
+
+        // add #! before urls
+        page.base('/admins');
+        page({
+            hashbang: true,
+        });
+    }
+</script>

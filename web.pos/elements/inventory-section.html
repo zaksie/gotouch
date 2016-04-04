@@ -1,0 +1,137 @@
+﻿
+<dom-module id="inventory-section">
+
+    <template>
+        <link rel="import" type="css" href="../../web.common/styles/shared-by-elements.css">
+        <link rel="import" type="css" href="../../bower_components/tablesorter/dist/css/theme.ice.min.css">
+
+        <style>
+            :host {
+                display: block;
+                width: 100%;
+            }
+
+            search-bar {
+                width: 50%;
+                float: right;
+            }
+
+            .table-item {
+                width: 200px;
+            }
+
+            .header {
+                font-weight: bolder;
+                text-align: center;
+            }
+
+            input:focus {
+                box-shadow: 2.5px 2.5px rgb(200, 200, 255);
+            }
+        </style>
+        <paper-material class="with-margins">
+            <div class="full layout vertical center-justified">
+                <div class="layout horizontal">
+                    <paper-icon-button icon="communication:import-export" on-click="onImport"></paper-icon-button>
+                    <search-bar max-suggestions="5" data="{{data}}"></search-bar>
+                </div>
+            </div>
+            <table id="myTable" class="tablesorter">
+                <thead>
+                    <tr>
+                        <th>Last Name</th>
+                        <th>First Name</th>
+                        <th>Email</th>
+                        <th>Due</th>
+                        <th>Web Site</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Smith</td>
+                        <td>John</td>
+                        <td>jsmith@gmail.com</td>
+                        <td>$50.00</td>
+                        <td>http://www.jsmith.com</td>
+                    </tr>
+                    <tr>
+                        <td>Bach</td>
+                        <td>Frank</td>
+                        <td>fbach@yahoo.com</td>
+                        <td>$50.00</td>
+                        <td>http://www.frank.com</td>
+                    </tr>
+                    <tr>
+                        <td>Doe</td>
+                        <td>Jason</td>
+                        <td>jdoe@hotmail.com</td>
+                        <td>$100.00</td>
+                        <td>http://www.jdoe.com</td>
+                    </tr>
+                    <tr>
+                        <td>Conway</td>
+                        <td>Tim</td>
+                        <td>tconway@earthlink.net</td>
+                        <td>$50.00</td>
+                        <td>http://www.timconway.com</td>
+                    </tr>
+                </tbody>
+            </table>
+        </paper-material>
+    </template>
+    <script src="../../bower_components/tablesorter/dist/js/jquery.tablesorter.min.js"></script>
+    <script src="../../bower_components/tablesorter/dist/js/jquery.tablesorter.widgets.min.js"></script>
+    <script>
+        Polymer({
+            is: "inventory-section",
+            properties: {
+                business: {
+                    type: Object,
+                    notify: true,
+                    reflectToAttribute: true
+                },
+                headers: {
+                    type: Array,
+                    notify: true,
+
+                },
+                data: {
+                    type: Array,
+                    notify: true,
+                    reflectToAttribute: true,
+                    observer: 'onDataChange'
+                }
+            },
+            ready: function () {
+            },
+            attached: function () {
+                this.async(function () {
+                    var data = [
+                        {
+                            title: 'title1',
+                            price: '1',
+                            description: 'This is the first title'
+                        },
+                        {
+                            title: 'title2',
+                            price: '2',
+                            description: 'This is the second title'
+                        }
+                    ];
+
+                    data.forEach(function (d) {
+                        d.fullname = d.title.concat(' ', d.description, ' ', d.price);
+                    });
+
+                    this.data = data;
+
+                    $("#myTable").tablesorter();
+                }.bind(this));
+            },
+            onDataChange: function () {
+                //this.$.inventoryTable.data = this.data;
+            }
+        });
+
+    </script>
+</dom-module>

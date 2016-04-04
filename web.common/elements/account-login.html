@@ -1,0 +1,712 @@
+﻿<link rel="import" href="ssn-input.html">
+
+<dom-module id="account-login">
+
+    <template>
+        <link rel="import" type="css" href="../../web.common/styles/shared-by-elements.css">
+
+        <style>
+            .login-links {
+                text-align: center;
+                font-size: medium;
+                font-stretch:expanded;
+            }
+
+            a:link, a:visited {
+                color: cornflowerblue;
+            }
+            paper-material {
+                background-image: radial-gradient(rgba(255,255,255,1), rgba(255,255,255,0.9)), url("/public/images/social-media.jpg");
+                background-size: cover;
+                margin-left:0;
+                margin-right:0;
+           }
+            paper-button#fb-login-button {
+                color:white;
+                background-color:rgb(58,86,156);
+                background-image: url("/public/images/facebook_logo.png");
+                background-repeat:no-repeat;
+                background-size:32px 32px;
+                background-position:5px center;
+            }
+
+            paper-button#gsignin2 {
+                background-color:white;
+                background-image: url("/public/images/google_logo.png");
+                background-repeat:no-repeat;
+                background-size:32px 32px;
+                background-position:5px center;
+
+            }
+            paper-button > span {
+                margin-left:28px;
+            }
+            .g-recaptcha {
+                left: 0;
+                right: 0;
+                margin: auto;
+            }
+            .login-links > span {
+                margin: auto 5px;
+                font-size: 0.7em;
+            }
+        </style>
+        <paper-toast id="toast1" text="{{toastText}}"></paper-toast>
+        <paper-material elevation="1" style="min-width:300px;">
+            <iron-pages id="pages" style="width:100%; height:auto" selected="{{mode}}">
+                    <div>
+                        <form is="iron-form" id="reset" method="post" action="{{getUserTypedUrl(route, '/reset')}}"
+                              with-credentials
+                              on-iron-form-response="onResetResponse"
+                              on-iron-form-error="onResetError"
+                              on-iron-form-submit="onSubmitted"
+                              class="hidden-animation">
+                            <div class="fjalla-caption">RESET PASSWORD</div>
+                            <paper-input id="username" name="username" type="email" error-message="Invalid email address" required label="Email"></paper-input>
+                            <input name="captcha" class="other-recaptcha" type="hidden" required />
+                            <div class="g-recaptcha" hidden="{{!showCaptcha}}"></div>
+                            <div class="login-links layout horizontal wrap">
+                                <span><a href="javascript:void(0)" class="login-links" on-click="onLogin">Login</a></span>
+                                <span>  |  </span>
+                                <span><a href="javascript:void(0)" class="login-links" on-click="onRegister">Register</a></span>
+                                <span>  |  </span>
+                                <span><a href="javascript:void(0)" class="login-links" on-click="onSupport">Support</a></span>
+                            </div>
+                            <paper-button class="submit-button blue-300" raised on-click="onSubmit">Submit</paper-button>
+                        </form>
+                    </div>
+                    <div>
+                        <form is="iron-form" id="login" method="post" action="{{getUserTypedUrl(route, '/yummlet')}}"
+                              with-credentials
+                              on-iron-form-response="onLoginResponse"
+                              on-iron-form-error="onLoginError"
+                              on-iron-form-submit="onSubmitted"
+                              class="hidden-animation">
+                            <div class="fjalla-caption">LOGIN</div>
+                            <paper-input id="username" name="username" type="email" 
+                                         error-message="Invalid email address or password" 
+                                         required label="Email" readonly="{{requireCodeOnLogin}}"></paper-input>
+                            <paper-input name="password" required label="Password" type="password" readonly="{{requireCodeOnLogin}}"></paper-input>
+                            <paper-input-container id="logincode" always-float-label attr-for-value="value"
+                                                   hidden="{{!requireCodeOnLogin}}"
+                                                   required="{{requireCodeOnLogin}}">
+                                <label>Verification code</label>
+                                <ssn-input class="paper-input-input" mxlength="3" value="{{code}}"></ssn-input>
+                                <paper-input-error>Invalid code. Try again or click support below.</paper-input-error>
+                            </paper-input-container>
+                            <input name="captcha" class="other-recaptcha" type="hidden" required />
+                            <input name="code" type="hidden" required value="{{code}}"/>
+                            <div class="g-recaptcha" hidden="{{!showCaptcha}}"></div>
+                            <div class="login-links layout horizontal wrap" hidden$="{{loginOnly}}">
+                                <span><a href="javascript:void(0)" class="login-links" on-click="onRegister">Register</a></span>
+                                <span>  |  </span>
+                                <span><a href="javascript:void(0)" class="login-links" on-click="onReset">Forgot password</a></span>
+                                <span>  |  </span>
+                                <span><a href="javascript:void(0)" class="login-links" on-click="onSupport">Support</a></span>
+                            </div>
+                            <paper-button class="submit-button blue-300" raised on-click="onSubmit">Submit</paper-button>
+                        </form>
+                    </div>
+                    <div>
+                        <form is="iron-form" id="register" method="post" action="{{getUserTypedUrl(route, '/register')}}"
+                              with-credentials
+                              on-iron-form-response="onRegisterResponse"
+                              on-iron-form-error="onRegisterError"
+                              on-iron-form-submit="onSubmitted"
+                              class="hidden-animation">
+                            <div class="fjalla-caption">REGISTER</div>
+                            <input hidden name="userRoute" value="{{userRoute}}" />
+                            <paper-input-container id="regcode" always-float-label attr-for-value="value"
+                                                   hidden="{{!requireCodeOnRegistration}}"
+                                                   required="{{requireCodeOnRegistration}}">
+                                <label>Registration code</label>
+                                <ssn-input class="paper-input-input" mxlength="4" value="{{code}}"></ssn-input>
+                                <paper-input-error>Invalid code. Try again or click support below.</paper-input-error>
+                            </paper-input-container>
+                            <input name="code" type="hidden" required value="{{code}}" />
+                            <paper-input name="username" type="email" error-message="Invalid email address" required label="Email"></paper-input>
+                            <paper-input auto-validate id="password" name="password" required label="Password" type="password"
+                                         allowedPattern="[a-zA-Z0-9]" prevent-invalid-input></paper-input>
+                            <paper-input auto-validate id="passwordCheck" required label="Repeat password" type="password"
+                                         allowedPattern="[a-zA-Z0-9]" prevent-invalid-input></paper-input>
+                            <input name="captcha" class="other-recaptcha" type="hidden" required/>
+                            <div class="g-recaptcha" hidden="{{!showCaptcha}}"></div>
+                            <div class="login-links layout horizontal wrap">
+                                <span><a href="javascript:void(0)" class="login-links" on-click="onLogin">Login</a></span>
+                                <span>  |  </span>
+                                <span><a href="javascript:void(0)" class="login-links" on-click="onReset">Forgot password</a></span>
+                                <span>  |  </span>
+                                <span><a href="javascript:void(0)" class="login-links" on-click="onSupport">Support</a></span>
+                            </div>
+                            <paper-button class="submit-button blue-300" raised on-click="onSubmit">Submit</paper-button>
+                        </form>
+                    </div>
+                    <div>
+                        <form is="iron-form" id="support" method="post" action="{{getUserTypedUrl(route, '/support')}}"
+                              with-credentials
+                              on-iron-form-response="onSupportResponse"
+                              on-iron-form-error="onSupportError"
+                              on-iron-form-submit="onSubmitted"
+                              class="hidden-animation">
+                            <div class="fjalla-caption">SUPPORT</div>
+                            <input hidden name="userRoute" value="{{userRoute}}" />
+                            <paper-input name="name" label="Name"></paper-input>
+                            <paper-input name="email" type="email" error-message="Invalid email address" required label="Email"></paper-input>
+                            <gold-phone-input name="phone" label="Phone #"
+                                              country-code="972"
+                                              phone-number-pattern="XXX-XXXXXXX">
+                            </gold-phone-input>
+                            <paper-textarea max-rows="3" required name="message" label="How can we help?"></paper-textarea>
+                            <div class="login-links layout horizontal wrap">
+                                <span><a href="javascript:void(0)" class="login-links" on-click="onLogin">Login</a></span>
+                                <span>  |  </span>
+                                <span><a href="javascript:void(0)" class="login-links" on-click="onRegister">Register</a></span>
+                                <span>  |  </span>
+                                <span><a href="javascript:void(0)" class="login-links" on-click="onReset">Forgot password</a></span>
+                            </div>
+                            <paper-button class="submit-button blue-300" raised on-click="onSubmit">Submit</paper-button>
+                        </form>
+                    </div>
+                    <div>
+                        <paper-input-container id="socialLoginCode" always-float-label attr-for-value="value"
+                                                   hidden="{{!requireCodeOnRegistration}}">
+                                <label>Registration code</label>
+                                <ssn-input class="paper-input-input" mxlength="4" value="{{code}}"></ssn-input>
+                                <paper-input-error>Invalid code. Try again or click support below.</paper-input-error>
+                        </paper-input-container>
+                        <br />
+                        <div class="login-links layout horizontal wrap">
+                            <span><a href="javascript:void(0)" class="login-links" on-click="onLogin">Login</a></span>
+                            <span>  |  </span>
+                            <span><a href="javascript:void(0)" class="login-links" on-click="onRegister">Register</a></span>
+                            <span>  |  </span>
+                            <span><a href="javascript:void(0)" class="login-links" on-click="onReset">Forgot password</a></span>
+                            <span>  |  </span>
+                            <span><a href="javascript:void(0)" class="login-links" on-click="onSupport">Support</a></span>
+                        </div>
+                    </div>
+                </iron-pages>
+            <div hidden$="{{disableSocialLogin}}">
+                <h1 class="divider">OR</h1>
+                <paper-button raised class="blue-300" id="gsignin2" alt="Google sign-in" on-click="onGoogleClick"><span>Sign in with Google</span></paper-button>
+                <paper-button raised class="blue-300" id="fb-login-button" alt="Facebook sign-in" on-click="onFbLoginClick"><span>Sign in with Facebook</span></paper-button>
+            </div>
+        </paper-material>
+    </template>
+    <script>
+        var me;
+  //////////////// FACEBOOK //////////////////////////
+        const BASIC_FB_SCOPES = ['email', 'public_profile'];
+        window.fbAsyncInit = function () {
+            var appId = 1717407078479612;
+            if (_.includes(location.hostname, 'localhost'))
+                appId = 1723458884541098;
+            FB.init({
+                appId: appId,
+                cookie: true,  // enable cookies to allow the server to access
+                // the session
+                xfbml: false,  // parse social plugins on this page
+                version: 'v2.5', // use version 2.5
+                oauth: true,
+                status: true, // check login status
+            });
+            window.dispatchEvent(new Event('FacebookAuthenticationReady'));
+        };
+
+        function fb_login(silent, scopes) {
+            scopes = BASIC_FB_SCOPES.concat(scopes || []).join(', ');
+            if (silent)
+                FB.getLoginStatus(function (response) {
+                    if (response.status === 'connected') {
+                        // the user is logged in and has authenticated your
+                        // app, and response.authResponse supplies
+                        // the user's ID, a valid access token, a signed
+                        // request, and the time the access token 
+                        // and signed request each expire
+                        //var uid = response.authResponse.userID;
+                        //var accessToken = response.authResponse.accessToken;
+                        FBUserHasLoggedIn(response);
+                    } else
+                        fb_login_aux();
+                });
+            else
+                fb_login_aux();
+
+            function fb_login_aux(){
+                FB.login(function (response) {
+                    FBUserHasLoggedIn(response);
+                }, {
+                    scope: scopes
+                });
+            }
+        }
+
+        function FBUserHasLoggedIn(response) {
+            window.dispatchEvent(new Event('FacebookAuthenticationOK'));
+
+            if (response.authResponse && response.status == 'connected') {
+                access_token = response.authResponse.accessToken; //get access token
+                user_id = response.authResponse.userID; //get FB UID
+
+                FB.api('/me', function (response) {
+                    email = response.email; //get user email
+                    name = response.name;
+                    username = response.id;
+                    FB.api(
+                        "/" + username + "/picture?type=large",
+                        function (response) {
+                            if (response && !response.error) {
+                                var image = response.data.url;
+                            }
+                            CommonModule.modules.user.authenticateSocialLogin({
+                                token: access_token,
+                                username: username,
+                                name: name,
+                                email: email,
+                                image: image,
+                                how: 'fb',
+                                route: CommonModule.ROUTE(),
+                                code: me.code
+                            });
+                        }
+                    );
+
+                });
+            }
+        }
+    </script>
+    <script>
+ //////////////// GOOGLE //////////////////////////
+
+        function signInCallback(googleUser) {
+            var auth2 = gapi.auth2.getAuthInstance();
+            // Listen for sign-in state changes.
+            auth2.isSignedIn.listen(signinChanged);
+
+            var profile = googleUser.getBasicProfile();
+            profile = {
+                username: profile.getId(), // Do not send to your backend! Use an ID token instead.
+                token: googleUser.getAuthResponse().id_token,
+                name: profile.getName(),
+                image: profile.getImageUrl(),
+                email: profile.getEmail()
+            };
+            profile.how = 'google';
+            profile.route = CommonModule.ROUTE();
+            profile.code = me.code;
+            CommonModule.modules.user.authenticateSocialLogin(profile);
+        }
+
+        function signOut() {
+            var auth2 = gapi.auth2.getAuthInstance();
+            auth2.signOut().then(function () {
+            });
+        }
+        function signinChanged(p1, p2, p3) {
+            if (!auth2.isSignedIn.get())
+                CommonModule.modules.user.logOutDone();
+        }
+        function google_login(silent) {
+            var options = {};
+            if (silent)
+                options = { prompt: 'none' };
+            auth2.signIn(options).then(function (a) {
+                if (auth2.isSignedIn.get()) {
+                    var googleUser = auth2.currentUser.get();
+                    signInCallback(googleUser);
+                }
+            });
+        }
+
+        function startGoogle() {
+            gapi.load('auth2', function () {
+                auth2 = gapi.auth2.init({
+                    client_id: '910047896261-grc6aga31tgfs50i2h433ubbtt8ijnfa.apps.googleusercontent.com',
+                    // Scopes to request in addition to 'profile' and 'email'
+                    //scope: 'additional_scope'
+                });
+                // Listen for sign-in state changes.
+                window.dispatchEvent(new Event('GoogleAuthenticationReady'));
+            });
+        }
+
+        function onFailure(error) {
+            console.log(error);
+        }
+    </script>
+    <script>
+        //////////// RECAPTCHA ////////////////
+        function onRecaptchaLoad() {
+            var captchas = document.querySelectorAll('.g-recaptcha');
+            _.forEach(captchas, function (captcha) {
+                grecaptcha.render(captcha, {
+                    sitekey: '6LccpRATAAAAALgLw7C6sFyMjA-3ckACE7ggOEf4',
+                    callback: onRecaptchaSuccess,
+                    size: getCaptchaSize()
+                });
+            });
+            window.dispatchEvent(new Event('RecaptchaReady'));
+        }
+        function onRecaptchaSuccess(response) {
+            var captchas = document.querySelectorAll('.other-recaptcha');
+            _.forEach(captchas, function (captcha) {
+                captcha.value = response;
+            });
+
+            hideAllRecaptchas();
+            var elem = $('account-login');
+            elem[0].onSubmit();
+        }
+
+        function hideAllRecaptchas() {
+            var captchas = document.querySelectorAll('.g-recaptcha');
+            _.forEach(captchas, function (captcha) {
+                captcha.hidden = true;
+            });
+        }
+        function getCaptchaSize() {
+            return window.innerWidth < 500 ? 'compact' : 'normal';
+        }
+    </script>
+    <script>
+        var SOCIAL_LOGIN_ATTEMPT = 'Attempting authentication using ';
+        var GOOGLE = 'Google';
+        var FACEBOOK = 'Facebook';
+        var captcha_activated = false;
+        var fb_activated = false;
+        var google_activated = false;
+        Polymer({
+            is: "account-login",
+            behaviors: [
+                Polymer.NeonAnimationRunnerBehavior
+            ],
+            properties: {
+                mode: {
+                    type: Number,
+                    notify: true,
+                    value: function () { return 1; }
+                },
+                toastText: {
+                    type: String,
+                    notify: true
+                },
+                showCaptcha: {
+                    type: Boolean,
+                    notify: true,
+                    value: function () { return false;}
+                },
+                requireCodeOnRegistration: {
+                    type: Boolean,
+                    notify: true,
+                    value: function () { return false;}
+                },
+                requireCodeOnLogin: {
+                    type: Boolean,
+                    notify: true,
+                    value: function () { return false; }
+                },
+                code: {
+                    type: String,
+                    notify:true
+                },
+                loginOnly: {
+                    type: Boolean,
+                    notify: true,
+                    value: function () { return false; }
+                },
+                disableSocialLogin: {
+                    type: Boolean,
+                    notify: true,
+                    value: function () { return false; }
+                },
+                bg: {
+                    type: String,
+                    notify: true,
+                    value: function () { return null; }
+                },
+                route: {
+                    type: String,
+                    notify:true,
+                }
+            },
+            created: function(){
+                ////////// SUBSCRIBE TO SOCIAL LOGINS ////////////
+                PubSub.subscribe('Activate.google',function(){ 
+                    this.async(function () {
+                        //TODO: test this
+                        this.onGoogleLogin.apply(this, true);
+                    }.bind(this));
+                }.bind(this));
+                PubSub.subscribe('Activate.fb', function(msg, data){ 
+                    this.async(function () {
+                        // data = [silent, scopes]
+                        this.onFbLogin.apply(this, data);
+                    }.bind(this));
+                }.bind(this));
+                PubSub.publish('SocialLogin.listening');
+                /////////////////////////////////////////////////
+
+            },
+            ready: function () {
+                this.$.password.validate = this.validatePassword.bind(this);
+                this.$.passwordCheck.validate = this.validatePasswordCheck.bind(this);
+                PubSub.subscribe('User.logged.social.fail', this.onSocialLoginFailed.bind(this));
+            },
+            attached: function () {
+                var children = $("form").children();
+                _.forEach(children, function (child) {
+                    if (_.includes(child.nodeName.toLowerCase(), 'input'))
+                        child.onkeypress = function (event) {
+                            if (event.which == 13) {
+                                event.preventDefault();
+                                this.onSubmit();
+                            }
+                        }.bind(this);
+                }.bind(this));
+
+                me = this;
+
+                if (this.bg) {
+                    var i,
+                        tags = document.querySelectorAll("paper-material");
+                    for (i = 0; i < tags.length; i++) {
+                        tags[i].style.background = this.bg;
+                    }
+                }
+                if (CommonModule.modules.user.shouldLoad.fb && !fb_activated)
+                    this.onFbLogin(true);
+                if (CommonModule.modules.user.shouldLoad.google && !google_activated)
+                    this.onGoogleLogin(true);
+
+                var links = this.querySelectorAll('.login-links');
+                _.forEach(links, function (link) {
+                    link.tabIndex = -1;
+                });
+
+                this.route = CommonModule.ROUTE();
+                PubSub.publish('account-login.ready');
+            },
+            getUserTypedUrl: function (route, subroute) {
+                if (!route) return;
+                return '/login' + route + subroute;
+            },
+            onFbLoginClick: function () {
+                this.onFbLogin(false);
+            },
+            onFbLogin: function (silent, scopes) {
+                window.writeToScreen(SOCIAL_LOGIN_ATTEMPT + FACEBOOK);
+                if (!fb_activated) {
+                    fb_activated = true;
+                    var fsignin = document.createElement('script');
+                    fsignin.setAttribute("src", "//connect.facebook.net/en_US/sdk.js");
+                    this.appendChild(fsignin);
+                    window.addEventListener('FacebookAuthenticationReady', this.onFbLogin.bind(this, silent, scopes));
+                }
+                else
+                    fb_login(silent, scopes);
+            },
+            activateCaptcha: function (callback) {
+                if (captcha_activated) return;
+                captcha_activated = true;
+                var captcha = document.createElement('script');
+                captcha.setAttribute("src", "//www.google.com/recaptcha/api.js?onload=onRecaptchaLoad&render=explicit");
+                this.appendChild(captcha);
+                window.addEventListener('RecaptchaReady', callback);
+            },
+            onGoogleClick: function (event, silent) {
+                this.onGoogleLogin(false);
+            },
+            onGoogleLogin: function (silent) {
+                window.writeToScreen(SOCIAL_LOGIN_ATTEMPT + GOOGLE);
+
+                if (!google_activated) {
+                    google_activated = true;
+                    var gsignin = document.createElement('script');
+                    gsignin.setAttribute("src", "//apis.google.com/js/client:platform.js?onload=startGoogle");
+                    this.appendChild(gsignin);
+                    window.addEventListener('GoogleAuthenticationReady', this.onGoogleLogin.bind(this, silent));
+                }
+                else
+                    google_login(silent);
+            },
+            onRegister: function () {
+                this.mode = 2;
+            },
+            onLogin: function () {
+                this.mode = 1;
+            },
+            onSupport: function(){
+                 this.mode = 3
+            },
+            onReset: function () {
+                this.mode = 0;
+            },
+            onSubmit: function () {
+                var formName = (function () {
+                    switch (this.mode) {
+                        case 0: return 'reset';
+                        case 1: return 'login';
+                        case 2: return 'register';
+                        case 3: return 'support';
+                    }
+                }.bind(this))();
+                if (this.validateCaptcha(formName)) {
+                    document.getElementById(formName).submit();
+                }
+            },
+            onSubmitted:function(){
+                this.disableAllSubmitButtons(true);
+            },
+            validateCaptcha: function (formName) {
+                if (!this.showCaptcha)
+                    return true;
+
+                switch (formName) {
+                    case 'support':
+                        return true;
+                }
+
+
+                // all values are set at once therefore there is only need to check one of them
+                var valid = document.querySelector('.other-recaptcha').value;
+                if (!valid)
+                {
+                    this.toastText = "Please fill out the captcha";
+                    this.$.toast1.show();
+                }
+                return valid;
+            },
+
+            disableAllSubmitButtons: function(disable){
+                var buttons = document.querySelectorAll('.submit-button');
+                _.forEach(buttons, function (b) {
+                    b.disabled = disable;
+                });
+            },
+            onLoginResponse: function (event, data) {
+                CommonModule.modules.user.loggedIn(data.response);
+                this.disableAllSubmitButtons(false);
+            },
+            onLoginError: function (event, data) {
+                var status = this.handleError(event, data);
+                if(status == 401)
+                    this.$.username.invalid = true;
+                else if(status == 449)
+                {
+                    this.requireCodeOnLogin = true;
+                    this.$.logincode.invalid = true;
+                }
+            },
+            onRegisterResponse: function (event, data) {
+                this.toastText = "Thank you! A confirmation mail has been sent to your account.";
+                this.$.toast1.show(function () {
+                    page('/');
+                });
+                this.disableAllSubmitButtons(false);
+            },
+            onRegisterError: function (event, data) {
+                var status = this.handleError(event, data);
+                if (status == 403) {
+                    this.toastText = "Sorry, username taken. Please try another one.";
+                    this.$.toast1.show();
+                }
+            },
+            onResetResponse: function (event, data) {
+                this.toastText = "Check your inbox for further instructions.";
+                this.$.toast1.show(function () {
+                    page('/');
+                });
+                this.disableAllSubmitButtons(false);
+            },
+            onResetError: function (event, data) {
+                this.handleError(event, data);
+            },
+            onSupportResponse: function (event, data) {
+                this.toastText = "Thanks, we'll contact you shortly";
+                this.$.toast1.show();
+                this.disableAllSubmitButtons(false);
+            },
+            onSupportError: function (event, data) {
+                var status = this.handleError(event, data);
+            },
+            handleError: function (event, data) {
+                var status = data.status || parseInt(data.error.message.match(/(\d+).*/)[1]);
+
+                this.disableAllSubmitButtons(false);
+
+                if (status == 500 || status == 503) {
+                    this.toastText = "We encountered a problem. Please try again later.";
+                    this.$.toast1.show();
+                }
+                else if (status == 406) {
+                    this.toastText = "There was a reCAPTCHA error. Please try again.";
+                    this.$.toast1.show();
+                }
+                else if (status == 429) {
+                    this.showCaptcha = true;
+                    this.activateCaptcha(function () {
+                        this.validateCaptcha();
+                    }.bind(this));
+                }
+
+                return status;
+            },
+            onSocialLoginFailed: function (msg, status) {
+                var msg = "Sorry, we're experiencing technical difficulties"
+                var requireCode = this.requireCodeOnRegistration
+                switch (status) {
+                    case 412:
+                        msg = "Activation is required";
+                        break;
+                    case 423:
+                        msg = "Expecting password change";
+                        requireCode=false;
+                        break;
+                    case 401:
+                        msg = "Incorrect username/password";
+                        break;
+                    case 403:
+                        msg = "Account is inactive";
+                        requireCode=false;
+                        break;
+                    default:
+                        msg = "Failed to verify authentication."
+                }
+                if (requireCode) {
+                    this.mode = 4;
+                    var valid = !this.requireCodeOnRegistration || this.$.socialLoginCode.value;
+                    this.$.socialLoginCode.invalid = !valid;
+                }
+                this.toastText = msg;
+                this.$.toast1.show();
+            },
+            validatePasswordCheck: function () {
+                if (this.$.password.invalid) return false;
+                this.$.passwordCheck.errorMessage = "Password mismatch";
+                this.$.passwordCheck.invalid = this.$.password.value != this.$.passwordCheck.value;
+                return !this.$.passwordCheck.invalid;
+
+            },
+            validatePassword: function () {
+                var numerals = /(?=.*\d+)/;
+                var letters = /(?=.*[a-zA-Z]+)/;
+                var length = /.{6,18}/;
+
+                var invalid = true;
+                var err;
+                if (!numerals.test(this.$.password.value))
+                    this.$.password.errorMessage = 'Must contain at least one digit';
+                else if (!letters.test(this.$.password.value))
+                    this.$.password.errorMessage = 'Must contain at least one letter';
+                else if (!length.test(this.$.password.value))
+                    this.$.password.errorMessage = 'Must be at between 6-18 characters long';
+                else
+                    invalid = false;
+                this.$.password.invalid = invalid;
+                this.disableAllSubmitButtons(!invalid);
+                return !invalid;
+            },
+        });
+
+    </script>
+</dom-module>

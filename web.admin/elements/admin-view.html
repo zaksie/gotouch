@@ -1,0 +1,131 @@
+﻿<dom-module id="admin-view">
+
+    <template>
+        <link rel="import" type="css" href="../../web.common/styles/shared-by-elements.css">
+
+        <style>
+            @media (min-width: 601px) {
+                .padded {
+                    padding: 48px 62px;
+                }
+            }
+
+            :host {
+                display: block;
+                z-index: 1;
+            }
+
+            .fixed {
+                position: relative;
+                height: 100%;
+                width: 100%;
+            }
+        </style>
+        <neon-animated-pages class="fixed" id="pages" selected="[[selection]]"
+                             entry-animation="{{entryAnimation}}" exit-animation="{{exitAnimation}}" on-iron-deselect="onDeselected">
+            <div class="padded">
+                <error-card id="error-card-id"></error-card>
+            </div>
+            <pos-user-manager id="pos-user-manager-id" on-back-click="_onBackClick"></pos-user-manager>
+            <div id="account-id" hidden$="{{!isLoggedIn}}"><account-logout></account-logout></div>
+        </neon-animated-pages>
+    </template>
+    <script>
+
+        const ERROR_PAGE = 0;
+        const POS_USER_MANAGER_PAGE = 1;
+        const ACCOUNT_PAGE = 2;
+
+        const ENTRY = "slide-from-right-animation";
+        const EXIT = "slide-left-animation";
+        const BACK_ENTRY = "slide-from-left-animation";
+        const BACK_EXIT = "slide-right-animation";
+        var wasBackClick = false;
+        Polymer({
+            is: "admin-view",
+            properties: {
+                selection: {
+                    type: Number,
+                    notify: true,
+                    value: function () { return 0; },
+                    observer: 'onSelectionChanged'
+                },
+                entryAnimation: {
+                    type: String,
+                    notify: true,
+                    value: function () { return ENTRY; }
+                },
+                exitAnimation: {
+                    type: String,
+                    notify: true,
+                    value: function () { return EXIT; }
+                },
+                backHistory: {
+                    type: Array,
+                    notify: true,
+                    value: function () { return []; },
+                },
+                isLoggedIn: {
+                    type: Boolean,
+                    notify: true,
+                    value: function () { return false; }
+                }
+            },
+            observers: [
+                'isBackEnabled(backHistory.length)'
+            ],
+            ready: function () {
+                PubSub.subscribe('neonpages.POSUserManager', this.onRequestSelectionChange.bind(this, POS_USER_MANAGER_PAGE));
+                PubSub.subscribe('neonpages.Account', this.onRequestSelectionChange.bind(this, ACCOUNT_PAGE));
+                PubSub.subscribe('User.logged', this.onSessionChange.bind(this));
+            },
+            attached: function () {
+                this.async(function () { window.dispatchEvent(new Event('PolymerElementsLoaded')) }.bind(this));
+                this.async(function () { this.onSessionChange(); }.bind(this));
+            },
+            onSessionChange: function (msg, value) {
+                this.isLoggedIn = CommonModule.modules.user.current.is();
+            },
+            onRequestSelectionChange: function (selection) {
+                this.selection = selection;
+            },
+            isBackEnabled: function (value) {
+                //this.$.backButton.hidden = !value;
+            },
+            onBackClick: function (event) {
+                var customBack = this.$.pages.selectedItem.onBackClick;
+                if (customBack)
+                    return (customBack.bind(this.$.pages.selectedItem.this))();
+
+                this._onBackClick(event);
+            },
+            _onBackClick: function (event) {
+                if (!this.backHistory.length) return;
+                this.entryAnimation = BACK_ENTRY;
+                this.exitAnimation = BACK_EXIT;
+
+                wasBackClick = true;
+                this.selection = this.pop('backHistory');
+
+                setTimeout(function () {
+                    this.entryAnimation = ENTRY;
+                    this.exitAnimation = EXIT;
+                }.bind(this), 500);
+            },
+            onSelectionChanged: function () {
+                PubSub.publish('app.scrollToTop');
+                switch (this.selection) {
+                    default:
+                }
+            },
+            onDeselected: function (event, moreinfo) {
+                var prev = event.target._prevSelected;
+                if (!wasBackClick)
+                    this.push('backHistory', prev);
+                wasBackClick = false;
+            }
+        });
+
+
+    </script>
+</dom-module>

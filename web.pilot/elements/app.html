@@ -1,0 +1,141 @@
+﻿<dom-module id="yummlet-pilot">
+    <template>
+        <link href='https://fonts.googleapis.com/css?family=Fjalla+One' rel='stylesheet' type='text/css'>
+        <link href='https://fonts.googleapis.com/css?family=Petit+Formal+Script' rel='stylesheet' type='text/css'>
+        <link href='https://fonts.googleapis.com/css?family=Alef&subset=hebrew,latin' rel='stylesheet' type='text/css'>
+        <link rel="import" type="css" href="../styles/pilot.css">
+        <link rel="import" type="css" href="../../web.common/styles/main.css">
+        <style>
+        </style>
+        <paper-toast id="toast" class="text-hebrew"></paper-toast>
+        <paper-drawer-panel drawer-width="0">
+            <paper-header-panel drawer></paper-header-panel>
+            <paper-header-panel main shadow>
+                <paper-toolbar id="navbar">
+                    <div class="text-hebrew layout horizontal">
+                        <a href="#about"><paper-button>אודות</paper-button></a>
+                        <a href="#registration"><paper-button>הרשמה</paper-button></a>
+                        <a href="#contact"><paper-button>צור קשר</paper-button></a>
+                    </div>
+                </paper-toolbar>
+                <div class="content">
+                    <div style="display:block; height:calc(100vh - 64px)">
+                        <div class="full-screen bg-image1 blurred"></div>
+                        <div class="full-screen hi-zindex layout vertical center center-justified">
+                            <div class="text-header">welcome to</div>
+                            <div class="text-title">yummlet</div>
+                            <div class="text-hebrew" style="font-size:large">פתרונות תוכנה למסעדות</div>
+                            <br />
+                            <br />
+                            <br />
+                            <br />
+                            <a href="#registration"><paper-button class="text-hebrew reg-button" raised>הרשמה לפיילוט</paper-button></a>
+                            <div class="text-hebrew" style="font-size:x-small"> החלה ההרשמה לפיילוט. המקומות מוגבלים.</div>
+                        </div>
+
+                        <div class="full-screen layout vertical center" style="background:white; color:black; padding:10px">
+                            <a name="about"></a>
+                            <br />
+                            <div style="font-size:xx-large; color:darkgreen">השירותים שלנו</div>
+                            <div><img src="/public/images/separator.jpg" style="width:40vw" /></div>
+                            <div class="text-hebrew">שלל של כלים שנועדו להקל על ניהול עסק בעידן הענן והרשתות החברתיות</div>
+                            <br />
+                            <br />
+                            <div class="grid flex layout horizontal center center-justified">
+                                <template is="dom-repeat" items="{{ourServices}}" as="service">
+                                    <paper-material class="grid-item layout vertical center" elevation="1">
+                                        <img src="{{service.image}}" width="90" height="90" />
+                                        <span class="card-title">{{service.title}}</span>
+                                        <span class="card-body">{{service.body}}</span>
+                                    </paper-material>
+                                </template>
+                            </div>
+                        </div>
+
+                        <div class="text-hebrew registration layout vertical center center-justified">
+                            <a name="registration"></a>
+                            <br />
+                            <form is="iron-form" id="registration" method="post" action="/login/pilot/register"
+                                  with-credentials
+                                  on-iron-form-response="onRegResponse"
+                                  on-iron-form-error="onRegError">
+                                <div class="reg-title">הרשמה</div>
+                                <paper-input name="name" label="שם" required></paper-input>
+                                <paper-input name="company" label="שם העסק" required></paper-input>
+                                <paper-input name="email" type='email' error-message="כתובת אינה חוקית" required label='Email'></paper-input>
+                                <gold-phone-input name="phone" label="מספר טלפון"
+                                                  country-code="972"
+                                                  phone-number-pattern="XX-XXXXXXX"
+                                                  style="direction:ltr">
+                                </gold-phone-input>
+                                <paper-textarea max-rows="3" name="message" label="הערות"></paper-textarea>
+                                <paper-button class="submit-button" raised on-click="onSubmit">רשמו אותי</paper-button>
+                            </form>
+                        </div>
+
+                        <div class="text-hebrew contact layout vertical center around-justified">
+                            <a name="contact"></a>
+                            <div class="layout horizontal">
+                                <iron-icon icon="communication:email"></iron-icon>
+                                <div style="width:20px"></div>
+                                <a href="mailto:contact@yummlet.com" style="color: cornflowerblue !important">צור קשר</a>
+                            </div>
+                            <div>yummlet by at-Allenby © 2016</div>
+                        </div>
+                        <div class="buffer">
+                        </div>
+                    </div>
+                </div>
+            </paper-header-panel>
+        </paper-drawer-panel>
+    </template>
+    <script>
+        Polymer({
+            is: "yummlet-pilot",
+            properties: {
+                ourServices: {
+                    type: Array,
+                    notify: true,
+                    reflectToAttribute: true,
+                    value: function () {
+                        return [
+                            {
+                                image: '/public/images/ic_credit_card_black_48px.svg',
+                                title: 'הזמנה ותשלום מהשולחן',
+                                body: 'קצרו את זמני ההמתנה למצלר ואפשרו ללקוחות לשלם ישירות מהשולחן באמצעות הטלפון הנייד כמו גם להזמין מנות ולעקוב אחר הסטטוס שלהן'
+                            },
+                            {
+                                image: '/public/images/ic_loyalty_black_36px.svg',
+                                title: 'שמרו על קשר עם הלקוחות',
+                                body: 'הציעו קופונים וכרטיסיות ללקוחות חוזרים'
+                            }
+                        ];
+                    }
+                }
+            },
+            ready: function () {
+            },
+            attached: function () {
+                app = this;
+                PubSub.publish('App.ready');
+            },
+            writeToScreen: function (msg) {
+                if (!_.isString(msg)) return;
+                var duration = 3000 + msg.length * 50;
+                this.$.toast.duration = duration;
+                this.$.toast.text = msg;
+                this.$.toast.show();
+            },
+            onSubmit: function () {
+                this.$.registration.submit();
+            },
+            onRegResponse: function () {
+                this.writeToScreen('תודה! נצור קשר בהקדם');
+                this.$.registration.reset();
+            },
+            onRegError: function (e) {
+                console.log(e);
+            }
+        });
+    </script>
+</dom-module>

@@ -1,0 +1,250 @@
+﻿
+<dom-module id="menu-uploader">
+    <template>
+        <link rel="import" type="css" href="../../web.common/styles/shared-by-elements.css">
+        <link rel="import" type="css" href="../styles/menu-uploader.css">
+
+        <style>
+
+        </style>
+        <!-- don't want this file input included in the form as it doesn't upload multiple files for some reason :(. instead i'm adding them to FormData manually-->
+        <input id="uglyinput1" type="file" name="files" multiple accept="application/pdf" hidden on-change="handleFiles">
+        <span class="fjalla-caption business-title">{{business.fullname}}</span>
+        <form is="iron-form" id="addMenuForm" method="post" action="/chefs/access/add/menu" class="hidden-animation">
+<!-- this is not used. a separate xhr is sent with the data from this form instead
+              with-credentials
+              on-iron-form-response="onResponse"
+              on-iron-form-error="onError"
+              on-iron-form-submit="onSubmitted"
+    -->
+
+            <div id="main" class="layout vertical">
+                <paper-material id="no1" class="vertical layout center with-margins">
+                    <small class="fjalla-caption">STEP 1</small>
+                    <div class="caption">UPLOAD THE <strong>PDF</strong> MENU</div>
+                    <paper-fab id="dropzone" style="margin:10px" icon="note-add" on-click="onAddMenuClick"></paper-fab>
+                    <p style="color:lightgray; font-size:10px">DRAG A FILE OR CLICK THE BUTTON</p>
+                    <p style="color:lightgray; font-size:8px">MULTIPLE PDFs ALLOWED</p>
+                    <div class="horizontal layout center wrap">
+                        <template is="dom-repeat" items="{{files}}" as="file">
+                            <div class="vertical layout center" style="margin: 15px">
+                                <div>
+                                    <img id="{{file.id}}" src="/public/images/pdf.png" width="40" height="53" />
+                                    <paper-badge class="badge" for="{{file.id}}" label="X" on-click="removeFile"></paper-badge>
+                                </div>
+                                <span class="file-name">{{getJustName(file.name)}}</span>
+                            </div>
+                        </template>
+                    </div>
+                </paper-material>
+
+                <!--  //////////////////////////////////////////////////////////  --->
+
+                <paper-material id="no2" class="vertical layout center with-margins">
+                    <small class="fjalla-caption">STEP 2</small>
+                    <div class="caption">ADD SOME INFO</div>
+                    <paper-dropdown-menu label="What kind of menu?" on-iron-select="onMenuTypeChange">
+                        <paper-tabs class="dropdown-content">
+                            <template is="dom-repeat" items="{{types}}" as="type">
+                                <paper-tab>{{type}}</paper-tab>
+                            </template>
+                        </paper-tabs>
+                    </paper-dropdown-menu>
+                    <paper-input required hidden$="{{!other}}" label="Menu type" name="menu_type" value="{{menu_type}}"></paper-input>
+                    <paper-input required hidden name="placeid" value="{{getValue(business.placeid)}}"></paper-input>
+                    <paper-input id="menuName" required name="name" error-message="Menu by that name already exists" label="Menu name (internal use)" style="min-width:150px"></paper-input>
+                    <paper-input id="menuTitle" required name="title" label="Menu title" style="min-width:150px"></paper-input>
+                    <paper-textarea name="description" required max-rows="3" label="A few words about the menu" autocapitalize char-counter maxlength="1500"></paper-textarea>
+                </paper-material>
+
+                <paper-material id="no3" class="flex vertical layout center center-justified with-margins">
+                    <small class="fjalla-caption">STEP 3</small>
+                    <div class="caption">SUBMIT</div>
+                    <paper-button class="blue-300" on-click="onSubmit">DONE</paper-button>
+                </paper-material>
+            </div>
+        </form>
+    </template>
+    <script>
+        Polymer({
+
+            is: 'menu-uploader',
+            properties: {
+                business: {
+                    type: Object,
+                    notify: true
+                },
+                types: {
+                    type: Array,
+                    notify: true,
+                    readOnly: true,
+                    value: function () { return ['Breakfast', 'Brunch', 'Lunch', 'Dinner', 'Desserts', 'Drinks', 'Other'] }
+                },
+                other: {
+                    type: Boolean,
+                    notify: true,
+                    value: function () { return false; }
+                },
+                files: {
+                    type: Array,
+                    notify: true,
+                    value: function () { return []; }
+                },
+                menu_type: {
+                    type: String,
+                    notify: true,
+                }
+            },
+            observers: [
+                'updateFileBadgePosition(files.length)'
+            ],
+            ready: function () {
+            },
+            attached: function () {
+                this.$.dropzone.addEventListener("dragenter", this.dragenter.bind(this), false);
+                this.$.dropzone.addEventListener("dragleave", this.dragleave.bind(this), false);
+                this.$.dropzone.addEventListener("dragover", this.dragover.bind(this), false);
+                this.$.dropzone.addEventListener("drop", this.drop.bind(this), false);
+            },
+            dragenter: function (e) {
+                e.stopPropagation();
+                e.preventDefault();
+
+                this.$.dropzone.style.backgroundColor = "lightgreen";
+                console.log('enter');
+            },
+            dragleave: function (e) {
+                e.stopPropagation();
+                e.preventDefault();
+                this.$.dropzone.style.backgroundColor = "#FF4081";
+                console.log('leave');
+            },
+            dragover: function (e) {
+                e.stopPropagation();
+                e.preventDefault();
+            },
+            drop: function (e) {
+                e.stopPropagation();
+                e.preventDefault();
+
+                var dt = e.dataTransfer;
+                var newEvent = { target: { files: dt.files } }; //convert it to the receiving function format
+
+                this.handleFiles(newEvent);
+
+            },
+            onAddMenuClick: function (e) {
+                if (this.$.uglyinput1) {
+                    this.$.uglyinput1.click();
+                }
+            },
+            handleFiles: function (event) {
+                var files = _.filter(event.target.files, function (file) {
+                    return file.type == 'application/pdf' && !_.find(this.files, function (f) {
+                        return f.name == file.name;
+                    });
+                }.bind(this));
+
+                _.forEach(files, function (file) {
+                    file.id = 'id' + Math.random().toString(36).substr(5);
+                });
+                if (files.length)
+                    this.splice.apply(this, ['files', this.files.length, 0].concat(files));
+            },
+            updateFileBadgePosition: function () {
+                setTimeout(function () {
+                    console.log('in updateFileBadgePosition');
+                    var elems = this.querySelectorAll('.badge');
+                    _.forEach(elems, function (elem) {
+                        if (elem.updatePosition)
+                            elem.updatePosition();
+                    });
+                }.bind(this), 50);
+
+            },
+            getJustName: function (name) {
+                return name.substring(0, name.length - 4);
+            },
+            
+            removeFile: function (event) {
+                this.splice('files', event.model.index, 1);
+            },
+            send: function () {
+                if (!CommonModule.utils.checkSize(this.files)) return false;
+
+                var form = this.$.addMenuForm;
+                var formData = new FormData(form);
+
+                _.forEach(this.files, function (file) {
+                    formData.append('files', file, file.name);
+                });
+
+                var xhr = new XMLHttpRequest();
+                xhr.withCredentials = true;
+                xhr.open('POST', '/chefs/access/add/menu', true);
+                xhr.onload = function () {
+                    if (xhr.status === 200) {
+                        // File(s) uploaded.
+                        window.writeToScreen('Files uploaded successfully');
+                        this.onResponse();
+                    }else  if (xhr.status === 403) {
+                        // File(s) uploaded.
+                        window.writeToScreen('Menu by that name already exists');
+                        this.$.menuName.focus();
+                        this.$.menuName.invalid = true;
+                    } else {
+                        window.writeToScreen('Service is currently unavailable. Please try again later.');
+                    }
+                }.bind(this);
+                xhr.send(formData);
+                return true;
+            },
+            onMenuTypeChange: function (event) {
+                this.other = this.types.length - 1 == event.target.selected;
+                this.menu_type = event.target.selectedItem.innerText;
+                if (!this.other) {
+                    this.$.menuTitle.value = this.$.menuTitle.value || event.target.selectedItem.innerText;
+                    this.$.menuName.value = this.$.menuName.value || event.target.selectedItem.innerText.toLowerCase() + ' v1';
+                }
+            },
+            onSubmit: function () {
+                this.querySelector('textarea').name = 'description'; // for some reason name is missing on textarea tho it's set in paper-textarea
+                if (CommonModule.utils.validateFiles(this.files) && this.$.addMenuForm.validate())
+                    this.send();
+            },
+            onSubmitted: function () {
+                this.disableButtons(true);
+            },
+            onResponse: function () {
+                window.writeToScreen('Menu uploaded successfully. We need a few minutes to process it.');
+                page('/menus/' + this.business.placeid);
+                this.clear();
+            },
+            clear: function(){
+                this.$.addMenuForm.reset();
+                this.$.uglyinput1.value = "";
+                this.$.menu_type = "";
+                this.$.files = [];
+                this.$.other = "";
+                this.splice('files', 0);
+            },
+            onError: function (event) {
+                this.disableButtons(false);
+                var status_code = /\d+/.exec(event.detail.error.message);
+                window.writeToScreen('(' + status_code[0] + ') An error was encountered. Please try again or contact support.');
+            },
+            disableButtons: function (disable) {
+                var buttons = this.querySelectorAll('paper-button');
+                _.forEach(buttons, function (button) {
+                    button.disabled = disable;
+                });
+            },
+            getBusinessStyle: function (business) {
+                return 'background-color: ' + business.locals.color;
+            },
+            getValue: function (placeid) {
+                return placeid; //to keep it readonly
+            }
+        });
+    </script>
+</dom-module>

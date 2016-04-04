@@ -1,0 +1,313 @@
+﻿<!--
+Copyright (c) 2015 The Polymer Project Authors. All rights reserved.
+This code may only be used under the BSD style license found at http://polymer.github.io/LICENSE.txt
+The complete set of authors may be found at http://polymer.github.io/AUTHORS.txt
+The complete set of contributors may be found at http://polymer.github.io/CONTRIBUTORS.txt
+Code distributed by Google as part of the polymer project is also
+subject to an additional IP rights grant found at http://polymer.github.io/PATENTS.txt
+-->
+<dom-module id="animated-grid">
+    <template>
+        <link rel="import" type="css" href="../../web.common/styles/shared-by-elements.css">
+
+        <link rel="import" type="css" href="../../web.common/styles/business-grid.css">
+        <style>
+            :host {
+                overflow:hidden;
+            }
+
+            #map{
+                height: 40vh;
+            }
+            
+            div:empty {
+                height: 0;
+                min-height: 0;
+                padding: 0;
+                margin-top: 0;
+                margin-bottom: 0;
+                border: none;
+            }
+            paper-material {
+                margin: 20px 0;
+                padding:0;
+            }
+            @media (max-width: 600px) {
+                paper-material {
+                    margin: 20px;
+                }
+            }
+
+            @media (min-width: 601px) {
+                #businessGrid{
+                    background:white;
+                    box-shadow: 0 4px 5px 0 rgba(0, 0, 0, 0.14), 0 1px 10px 0 rgba(0, 0, 0, 0.12), 0 2px 4px -1px rgba(0, 0, 0, 0.4);
+                }
+            }
+        </style>
+        <paper-material id="map" class="hidden-animation" elevation="2"></paper-material>
+        <div id="businessGrid">
+            <div class="layout vertical center-justified">
+                <div style="display:block">
+                    <div class="grid">
+                        <template is="dom-repeat" items="{{places}}">
+                            <paper-card class="grid-item-size grid-item" heading="{{item.name}}"
+                                        on-click="_onClick" on-mouseover="onMouseOverCard" on-mouseout="onMouseOutOfCard"
+                                        image="{{item.photo.thumbnail}}" animated-shadow elevation=1>
+                                <div class="card-content" style="text-align:justify; font-size:xx-small; margin:0; padding: 2px">
+                                    <div class="stars-div">
+                                        <template is="dom-if" if="{{item.rating}}">
+                                            <span class="stars">
+                                                <span class="stars" style$="{{getStarRating(item.rating)}}"></span>
+                                            </span>
+                                        </template>
+                                    </div>
+                                    <div style="direction:rtl">
+                                        <span>{{getDistanceFormat(item.distance)}}</span>
+                                    </div>
+                                </div>
+                                <div class="card-actions" style="margin:0; padding: 0">
+                                    <paper-icon-button icon="favorite" toggles="true" title="mark as favorite" active="false"></paper-icon-button>
+                                    <paper-icon-button icon="bookmark" title="bookmark for later" active="false"></paper-icon-button>
+                                </div>
+                            </paper-card>
+                        </template>
+                        <template is="dom-repeat" items="{{PLACEHOLDERS}}">
+                            <div class="grid-item-size grid-item"></div>
+                        </template>
+                    </div>
+                </div>
+                <paper-button class="hidden-animation standard blue-300" style$="{{getStyleButton(displayShowMoreButton)}}" raised animated on-click="onShowMore">Show more</paper-button>
+            </div>
+        </div>
+    </template>
+    <script>
+        var mapCallbacked = false;
+        var initMap = function () {
+            mapCallbacked = true;
+            PubSub.publish('GooglePlaces.mapCallback');
+            window.dispatchEvent(new Event('GoogleMapsReady'));
+        }
+    </script>
+    <!-- TODO: check if sync defer can be changed to nonsync -->
+    <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyDE2bm63ERPDoikiKQd96pd4AQ0_641K2s&callback=initMap">
+    </script>
+    <script>
+
+        var map;
+        var center;
+        var bounds;
+
+        const CARD_HOVER_ELEVATION = 3;
+        const CARD_ELEVATION = 1;
+        const MAX_WIDTH_STAR_RATING = 60;
+        const OUT_OF_TOTAL_STARS = 5;
+        const UPPER_THRESHOLD_FOR_SHORT_METER_DISPLAY = 950;
+        const INFO_WINDOW_MAX_WIDTH = 300;
+        var placeids = [];
+        var markers = [];
+        Polymer({
+
+            is: 'animated-grid',
+
+            behaviors: [
+              Polymer.NeonAnimatableBehavior
+            ],
+
+            properties: {
+
+                places: {
+                    type: Array,
+                    notify: true,
+                    value: function () { return []; }
+
+                },
+                displayShowMoreButton: {
+                    type: Boolean,
+                    notify: true,
+                    value: function () { return false; }
+                },
+                PLACEHOLDERS: {
+                    type: Array,
+                    notify: true,
+                    value: function () { return new Array(20); }
+                }
+
+            },
+            ready: function () {
+                PubSub.subscribe('Business.received', this.onNewItemReceived.bind(this));
+                PubSub.subscribe('Business.error', this.onNearBySearchServerError.bind(this));
+                PubSub.subscribe('Business.fetch.end', this.onSearchEnded.bind(this));
+                PubSub.subscribe('Business.fetch.start', this.onSearchStarted.bind(this));
+                PubSub.subscribe('Business.noMoreResults', this.onNoMoreResults.bind(this));
+
+                if (mapCallbacked)
+                    this.onMapGoogleCallback();
+
+                PubSub.subscribe('GooglePlaces.mapCallback', this.onMapGoogleCallback.bind(this));
+            },
+            attached: function () {
+            },
+            onMapGoogleCallback: function () {
+                center = new google.maps.LatLng(32.08, 34.56);
+                bounds = new google.maps.LatLngBounds();
+
+                map = new google.maps.Map(this.$.map, {
+                    center: center,
+                    zoom: 15,
+                    zoomControl: true,
+                    mapTypeControl: false,
+                    scaleControl: false,
+                    streetViewControl: false,
+                    rotateControl: false
+                });
+            },
+            onNewItemReceived: function (msg, item) {
+                if (_.includes(placeids, item.placeid)) return;
+
+                placeids.push(item.placeid);
+                this.addToMap(item);
+                this.addToGrid(item);
+            },
+            addToMap: function (item) {
+                var latLng = new google.maps.LatLng(item.location[0], item.location[1]);
+                var marker = new google.maps.Marker({
+                    position: latLng,
+                    map: map,
+                    animation: google.maps.Animation.DROP,
+                    title: item.name
+                });
+                var infowindow = new google.maps.InfoWindow({
+                    content: this.createInfoWindow(item),
+                    maxWidth: INFO_WINDOW_MAX_WIDTH
+                });
+
+                marker.addListener('click', function () {
+                    infowindow.open(map, marker);
+                });
+
+                markers.push({ marker: marker, data: item });
+
+                bounds.extend(marker.getPosition());
+                this.refreshMap();
+            },
+            refreshMap: function () {
+                if (map && bounds) {
+                    var center = map.getCenter();
+                    google.maps.event.trigger(map, "resize");
+                    map.setCenter(center);
+                    map.fitBounds(bounds);
+                }
+            },
+            createInfoWindow: function (business) {
+                var address = business.address || '';
+                var phoneNumber = business.phoneNumber || '';
+                var rating = '', phoneNumber = '', image = '';
+                if (business.rating)
+                    rating = '<span class="stars">'
+                                + '<span class="stars" style="' + this.getStarRating(business.rating) + '"></span>'
+                             + '</span>';
+                if (business.photo.image)
+                    image = 'image = "' + business.photo.image + '"';
+
+                return '<paper-card class="map-info-window"'
+                    + 'heading="' + business.name + '" ' + image + ' animated-shadow elevation=1>'
+                    + '<div class="card-content">'
+                        + '<strong>' + address + '</strong>'
+                        + '<p>' + phoneNumber + '</p>'
+                        + rating
+                    + '</div>'
+                    + '<div class="card-actions">'
+                        + '<paper-button animated on-click="onMenuShortcut">Menu</paper-button>'
+                        + '<paper-button animated on-click="onReviewsShortcut">Reviews</paper-button>'
+                        + '<paper-button animated on-click="onPhotosShortcut">Photos</paper-button>'
+                    + '</div>'
+                + '</paper-card>';
+            },
+            onMenuShortcut: function (e) {
+                this.fire('on-tile', e);
+            },
+            addToGrid: function (item) {
+                var index = _.find(this.places, function (place) {
+                    place.distance < item.distance;
+                });
+                if (!index)
+                    this.push('places', item);
+                else
+                    this.splice('places', index, 0, item);
+            },
+            onNearBySearchServerError: function (msg) {
+                console.log('Server error fetching items');
+            },
+            onSearchStarted: function (msg, location) {
+                placeids.length = 0;
+                this.displayShowMoreButton = false;
+                this.clearGrid();
+                this.clearMap();
+                center = new google.maps.LatLng(location.lat, location.lon);
+                if (map)
+                    map.panTo(center);
+            },
+            clearGrid: function () {
+                this.splice('places', 0, this.places.length);
+            },
+            clearMap: function () {
+                _.forEach(markers, function (marker) {
+                    marker.marker.setMap(null);
+                });
+                markers.length = 0;
+                if (google)
+                    bounds = new google.maps.LatLngBounds();
+            },
+            onSearchEnded: function () {
+                this.displayShowMoreButton = true;
+            },
+            onShowMore: function () {
+                this.displayShowMoreButton = false;
+                PubSub.publish('Business.request.moreResult');
+            },
+            onNoMoreResults: function () {
+                this.displayShowMoreButton = false;
+            },
+            getDistanceFormat: function (meters) {
+                var result = Math.ceil(meters / 25) * 25;
+                if (meters > UPPER_THRESHOLD_FOR_SHORT_METER_DISPLAY)
+                    return (Math.round(result / 100) / 10) + ' קמ';
+                return result + ' מ';
+            },
+            getStarRating: function (rating) {
+                var stars = MAX_WIDTH_STAR_RATING * rating / OUT_OF_TOTAL_STARS;
+                var val = "width: " + stars + "px";
+                return val;
+            },
+            _computeTileClass: function (color) {
+                return 'tile ' + color + '-300';
+            },
+            onMouseOverCard: function (event) {
+                event.currentTarget.attributes.elevation.value = CARD_HOVER_ELEVATION;
+            },
+            onMouseOutOfCard: function (event) {
+                event.currentTarget.attributes.elevation.value = CARD_ELEVATION;
+            },
+            _onClick: function (event) {
+                var target = event.target;
+                if (target.nodeName == "PAPER-ICON-BUTTON" || target.nodeName == "PAPER-RIPPLE")
+                    return;
+                while (target !== this && !target._templateInstance) {
+                    target = target.parentNode;
+                }
+
+                var business = target._templateInstance.item
+
+                page('/places/' + business.placeid);
+            },
+            getStyleButton: function (displayShowMoreButton) {
+                if (!displayShowMoreButton)
+                    return 'display:none';
+                else
+                    return 'display:block';
+            }
+
+        });
+    </script>
+</dom-module>

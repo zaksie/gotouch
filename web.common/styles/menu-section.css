@@ -1,0 +1,89 @@
+﻿.menu-image {
+    position: absolute;
+    cursor: pointer;
+    height: 150px;
+    width: 120px;
+    margin: 0;
+    padding: 0;
+    border: outset 3px goldenrod;
+}
+
+
+.inset-text {
+    position: relative;
+    top: 10px;
+    color: rgba(0,0,0, 0.8);
+    font-size: xx-small;
+    text-align: center;
+    letter-spacing: 3px;
+    font-stretch: extra-expanded;
+}
+
+.menu-name {
+    margin-top: 5px;
+    color: gray;
+    font-size: medium;
+    text-transform: uppercase;
+    font-family: 'Fjalla One', sans-serif;
+    text-align: center;
+}
+
+.message-in-3d {
+    position:absolute;
+    -moz-transform: rotateX(-30deg);
+    -ms-transform: rotateX(-30deg);
+    -o-transform: rotateX(-30deg);
+    -webkit-transform: rotateX(-30deg);
+    transform: rotateX(-30deg);
+    text-transform:uppercase;
+    color:white;
+    font-size:small;
+    font-weight:bold;
+    left:0;
+    right:0;
+    margin:auto;
+}
+
+.menu-picture {
+    position: relative;
+    top: 0;
+    left: 0;
+    right: 0;
+    margin: auto;
+    padding: 0;
+    text-align: center;
+    background-repeat: no-repeat;
+    border: 1px solid gold;
+    min-width: 100px;
+    -webkit-transition: height .5s ease-in, max-height .5s ease-in, max-width .5s ease-in, background-position .5s ease-in, background-size .5s ease-in, background-image 0.5s ease-in-out, background 0.5s ease-in-out;
+    -moz-transition: height .5s ease-in, max-height .5s ease-in, max-width .5s ease-in, background-position .5s ease-in, background-size .5s ease-in, background-image 0.5s ease-in-out, background 0.5s ease-in-out;
+    -o-transition: height .5s ease-in, max-height .5s ease-in, max-width .5s ease-in, background-position .5s ease-in, background-size .5s ease-in, background-image 0.5s ease-in-out, background 0.5s ease-in-out;
+    transition: height .5s ease-in, max-height .5s ease-in, max-width .5s ease-in, background-position .5s ease-in, background-size .5s ease-in, background-image 0.5s ease-in-out, background 0.5s ease-in-out;
+}
+
+.animatedmenu {
+    -moz-transition: background-color .2s ease-in;
+    -o-transition: background-color .2s ease-in;
+    -webkit-transition: background-color .2s ease-in;
+    transition: background-color .2s ease-in;
+}
+
+a:link {
+    text-decoration: none;
+    color: black;
+}
+
+a:visited {
+    text-decoration: none;
+    color: black;
+}
+
+a:hover {
+    text-decoration: none;
+    color: green;
+}
+
+a:active {
+    text-decoration: none;
+    color: green;
+}

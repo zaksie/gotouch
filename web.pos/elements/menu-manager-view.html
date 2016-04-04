@@ -1,0 +1,93 @@
+﻿
+<dom-module id="menu-manager-view">
+    <template>
+        <link rel="import" type="css" href="../../web.common/styles/shared-by-elements.css">
+        <style>
+        </style>
+        <iron-pages id="pages" selected="{{selected}}">
+            <menu-section-pos id="menu-section-pos" businesses="{{businesses}}" business="{{business}}"></menu-section-pos>
+            <div id="menu-uploader-ph"></div>
+            <div id="menu-editor-ph"></div>
+        </iron-pages>
+
+    </template>
+    <script>
+        var i_100 = 0;
+        const MENU_MAIN_PAGE = i_100++;
+        const MENU_UPLOADER_PAGE = i_100++;
+        const MENU_EDITOR_PAGE = i_100++;
+        Polymer({
+
+            is: 'menu-manager-view',
+
+            properties: {
+                selected: {
+                    type: Number,
+                    notify: true,
+                    value: function () { return 0; }
+                },
+                businesses: {
+                    type: Array,
+                    notify: true,
+                    reflectToAttribute: true,
+                },
+                business: {
+                    type: Array,
+                    notify: true,
+                    reflectToAttribute: true,
+                }
+            },
+            ready: function () {
+            },
+            attached: function () {
+                PubSub.subscribe('neonpages.Menus.main', this.onSelectionChange.bind(this, MENU_MAIN_PAGE));
+                PubSub.subscribe('neonpages.Menus.add', this.onSelectionChange.bind(this, MENU_UPLOADER_PAGE));
+                PubSub.subscribe('neonpages.Menus.viewedit', this.onSelectionChange.bind(this, MENU_EDITOR_PAGE));
+            },
+            onSelectionChange: function (selection, msg, params) {
+                if (this.selected == selection && this.$.pages.items[selection].innerHTML) return;
+
+                if (_.isArray(params)) {
+                    var placeid = params[0];
+                    var menuName = params[1];
+                }
+                else
+                    placeid = params;
+
+                var businessIndex = _.findIndex(this.businesses, function (b) { return b.placeid == placeid });
+                this.clearAll();
+                switch(selection)
+                {
+                    case MENU_UPLOADER_PAGE:
+                        this.injectMenuUploader(businessIndex);
+                        PubSub.publish('app.scrollToTop');
+                        break;
+                    case MENU_EDITOR_PAGE:
+                        this.injectMenuEditor(businessIndex, menuName);
+                        PubSub.publish('app.scrollToTop');
+                        break;
+                    case MENU_MAIN_PAGE:
+                        this.$["menu-section-pos"].scrollTo(placeid);
+                }
+                this.selected = selection;
+            },
+            injectMenuUploader(businessIndex) {
+                var elem = document.createElement("menu-uploader");
+                elem.business = this.businesses[businessIndex];
+                this.$["menu-uploader-ph"].appendChild(elem);
+            },
+            injectMenuEditor(businessIndex, menuName) {
+                var elem = document.createElement("menu-editor");
+                elem.business = this.businesses[businessIndex];
+                elem.menu = _.find(this.businesses[businessIndex].menus, function (menu) {
+                    return menu.name == menuName;
+                });
+                this.$["menu-editor-ph"].appendChild(elem);
+            },
+            clearAll() {
+                this.$["menu-uploader-ph"].innerHTML = "";
+                this.$["menu-editor-ph"].innerHTML = "";
+            }
+        });
+    </script>
+</dom-module>

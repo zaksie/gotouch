@@ -1,0 +1,1 @@
+vulcanize --inline-css --inline-scripts c:\projects\go_touch\web.pilot\elements\myElements.html > c:\projects\go_touch\public\app.pilot\pilot-components.html

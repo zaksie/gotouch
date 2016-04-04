@@ -1,0 +1,58 @@
+﻿
+
+<dom-module id="pay-with-paypal">
+    <template>
+        <link rel="import" type="css" href="../../web.common/styles/shared-by-elements.css">
+        <link rel="import" type="css" href="../styles/payment-button.css">
+        <style>
+        </style>
+        <div>
+            <paper-button class="hidden-animation yellow-300" disabled$="{{getState(redirectingToPaypal, enabled)}}" 
+                          raised id="paypal-button" alt="" on-click="onPaypalClick">
+                <div class="layout horizontal">
+                    <paper-spinner hidden="{{!redirectingToPaypal}}" active></paper-spinner>
+                    <iron-icon src="/public/images/paypal_logo.png"></iron-icon>
+                    <span class="flex" style="text-align:center">Pay with paypal</span>
+                </div>
+            </paper-button>
+        </div>
+    </template>
+    <script>
+
+        Polymer({
+            is: "pay-with-paypal",
+            properties: {
+                redirectingToPaypal: {
+                    type: Boolean,
+                    notify: true,
+                    value: function () { return false; },
+                },
+                enabled: {
+                    type: Boolean,
+                    notify: true,
+                },
+            },
+            ready: function () {
+            },
+            onPaypalClick: function () {
+                CommonModule.payment.paypal.pay(this.onResponse, this.onError);
+                this.redirectingToPaypal = true;
+            },
+            getState: function(redirectingToPaypal, enabled){
+                var disabled = redirectingToPaypal || !enabled;
+                return disabled;
+            },
+            onResponse: function (link, status) {
+                if (status == 'success')
+                    window.location.replace(link);
+            },
+            onError: function (data) {
+                var message ={
+                    header: "Sorry",
+                    body: "We're experiencing some issues. Please try again in a few minutes."
+                }
+                this.fire("message", message);
+            }
+        });
+    </script>
+</dom-module>

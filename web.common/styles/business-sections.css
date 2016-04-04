@@ -1,0 +1,73 @@
+﻿paper-fab {
+    width:10vw;
+    height:10vw;
+    max-width:50px;
+    max-height:50px;
+    margin:40px 0 0;
+    position:relative;
+    pointer-events:all;
+}
+
+.menu{
+    background-color:rgba(129,199,132,0.6);
+}
+.gallery{
+    background-color:rgba(79,195,247,0.6);
+}
+.review{
+    background-color:rgba(77,208,225,0.6);
+}
+
+.friend{
+    background-color:rgba(77,182,172,0.6);
+}
+
+.menu-button{
+    background-color:rgb(129,199,132);
+}
+.gallery-button{
+    background-color:rgb(79,195,247);
+}
+.review-button{
+    background-color:rgb(77,208,225);
+}
+
+.friend-button{
+    background-color:rgb(77,182,172);
+}
+
+.page-caption {
+    pointer-events:none;
+    color: white;
+    position: fixed;
+    top: 0;
+    left: 1%;
+    width: 10vw;
+    max-width: 50px;
+    top:64px;
+    height: 100vh;
+    z-index: 4;
+    -moz-transition: all 1.5s ease;
+    -o-transition: all 1.5s ease;
+    -webkit-transition: all 1.5s ease;
+    transition: all 1.5s ease;
+}
+
+@media (min-width: 601px){
+    .page-caption{
+        left: 210px !important;
+    }
+}
+.vertical-text {
+    position: absolute;
+    left:0;
+    right:0;
+    margin:auto;
+    top: 80vh;
+    text-transform:uppercase;
+    -moz-transform: rotate(-90deg);
+    -ms-transform: rotate(-90deg);
+    -o-transform: rotate(-90deg);
+    -webkit-transform: rotate(-90deg);
+    transform: rotate(-90deg);
+}

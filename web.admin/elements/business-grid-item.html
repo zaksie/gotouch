@@ -1,0 +1,140 @@
+﻿<!--
+Copyright (c) 2015 The Polymer Project Authors. All rights reserved.
+This code may only be used under the BSD style license found at http://polymer.github.io/LICENSE.txt
+The complete set of authors may be found at http://polymer.github.io/AUTHORS.txt
+The complete set of contributors may be found at http://polymer.github.io/CONTRIBUTORS.txt
+Code distributed by Google as part of the polymer project is also
+subject to an additional IP rights grant found at http://polymer.github.io/PATENTS.txt
+-->
+<dom-module id="business-grid-item">
+    <template>
+        <link rel="import" type="css" href="../../web.common/styles/shared-by-elements.css">
+        <link rel="import" type="css" href="../../web.common/styles/business-grid.css">
+        <style>
+            .big {
+                min-width: 300px;
+                width: 300px;
+                max-width: 350px;
+                min-height: 400px;
+                height: 400px;
+                max-height: 400px;
+                --paper-card-header-image: {
+                    height: 250px;
+                    --iron-image-height: 100%;
+                }
+            }
+
+            .small {
+                min-width: 100px;
+                width: 100px;
+                max-width: 180px;
+                min-height: 180px;
+                height: 180px;
+                max-height: 180px;
+                --paper-card-header-image: {
+                    height: 100px;
+                    --iron-image-height: 100%;
+                }
+            }
+
+            .custom {
+                min-width: 100px;
+                width: 100px;
+                max-width: 130px;
+                min-height: 140px;
+                height: 140px;
+                max-height: 140px;
+                padding:0;
+                --paper-card-header-image: {
+                    max-height: 100px;
+                    height: 100px;
+                    --iron-image-height: 100%;
+                }
+            }
+        </style>
+        <paper-card id="container" class="grid-item custom" heading="{{getName(business)}}"
+                    on-click="_onClick" on-mouseover="onMouseOverCard" on-mouseout="onMouseOutOfCard"
+                    image="/public/images/notfound.jpg" animated-shadow elevation=1>
+            <div class="card-content" style="text-align:justify; font-size:xx-small; margin:0; padding: 2px">
+            </div>
+            <div class="card-actions" style="margin:0; padding: 0; height:40px">
+                <paper-icon-button icon="close" active="true"></paper-icon-button>
+            </div>
+        </paper-card>
+    </template>
+    <script>
+
+        const CARD_HOVER_ELEVATION = 3;
+        const CARD_ELEVATION = 1;
+        const MAX_WIDTH_STAR_RATING = 60;
+        const OUT_OF_TOTAL_STARS = 5;
+        const UPPER_THRESHOLD_FOR_SHORT_METER_DISPLAY = 950;
+        var businessHashTable = {}
+        Polymer({
+
+            is: 'business-grid-item',
+
+            behaviors: [
+              Polymer.NeonAnimatableBehavior
+            ],
+
+            properties: {
+                business: {
+                    type: Object,
+                    readyOnly: true,
+                    notify: true
+                },
+                size: {
+                    type: String,
+                    readyOnly: true,
+                    value: function () { return 'small'; } // other option: big
+                },
+                shape: {
+                    type: String,
+                    readyOnly: true,
+                    value: function () { return 'square'; } // other option: round
+                },
+                fullname:{
+                    type: String,
+                    readyOnly: true,
+                },
+                hideActions: {
+                    type: Boolean,
+                    readyOnly: true,
+                    value: function () { return false; }
+                }
+
+            },
+            ready: function () {
+            },
+            attached: function () {
+                //this.setSize();
+                //this.setShape();
+            },
+            setSize: function () {
+                this.toggleClass(this.size, true, this.$.container);
+            },
+            setShape: function () {
+                //this.toggleClass(this.shape, true, this.$.container);
+            },
+            getName: function(business){
+                if(this.fullname)
+                    return business.fullname
+                return business.name;
+            },
+            onMouseOverCard: function (event) {
+                event.currentTarget.attributes.elevation.value = CARD_HOVER_ELEVATION;
+            },
+            onMouseOutOfCard: function (event) {
+                event.currentTarget.attributes.elevation.value = CARD_ELEVATION;
+            },
+            _onClick: function (event) {
+                if(event.currentTarget.dataHost)
+                var business = event.currentTarget.dataHost.business;
+                var target = event.target;
+                if (target.icon == 'close')
+                    return this.fire('remove-click', business);
+            },
+        });
+    </script>
+</dom-module>

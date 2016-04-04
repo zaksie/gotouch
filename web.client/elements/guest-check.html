@@ -1,0 +1,321 @@
+﻿<link rel="import" href="../../web.common/elements/dropdown/x-select.html">
+
+<dom-module id="guest-check">
+    <template>
+        <link rel="import" type="css" href="../../web.common/styles/shared-by-elements.css">
+        <link rel="import" type="css" href="../../web.common/styles/tables.css">
+        <link rel="import" type="css" href="../../web.common/styles/guest-check.css">
+        <style>
+            ul {
+                display: block;
+                position: relative;
+                background-color: #fff;
+                box-shadow: 0 2px 6px #ccc;
+                margin: 0.25em 0;
+                padding: 0.25em;
+                border-radius: 3px;
+            }
+
+            [vertical-align="top"] ul {
+                margin-top: 0;
+            }
+
+            [vertical-align="bottom"] ul {
+                margin-bottom: 0;
+            }
+
+            li {
+                display: block;
+                position: relative;
+                margin: 0;
+                padding: 0;
+            }
+
+            a {
+                display: block;
+                position: relative;
+                padding: 1em;
+                text-decoration: none;
+                color: black;
+            }
+
+                a:hover {
+                    background: rgba(0,0,255,0.3);
+                    text-decoration: none;
+                }
+
+            li:not(:last-of-type) {
+                border-bottom: 1px solid #eee;
+            }
+
+            iron-icon.small {
+                height: 18px;
+                width: 18px;
+            }
+
+            paper-material {
+                padding: 0;
+            }
+            .tip-text{
+                display:inline;
+                opacity:0.6;
+                margin:0;
+                font-size: small;
+                padding:2px;
+            }
+            #gccontainer{
+                width:95%;
+                left:0;
+                right:0;
+                margin:auto;
+            }
+        </style>
+        <div id="gccontainer">
+            <paper-material class="vertical layout check" elevation="1">
+                <paper-spinner id="spinner" hidden></paper-spinner>
+                <div class="caption" style="display:block; text-align:center">{{business.name}}</div>
+                <table class="details-table">
+                    <tr>
+                        <td>
+                            <div>
+                                Date
+                                <div class="handwriting">{{tab.date}}</div>
+                            </div>
+                        </td>
+                        <td>
+                            <div>
+                                Table
+                                <div class="handwriting">{{tab.no}}</div>
+                            </div>
+                        </td>
+                        <td>
+                            <div>
+                                Guests
+                                <div class="handwriting">{{tab.dinersCount}}</div>
+                            </div>
+                        </td>
+                        <td>
+                            <div>
+                                Server
+                                <div class="handwriting">{{tab.server}}</div>
+                            </div>
+                        </td>
+                        <td colspan="2">
+                            <div>
+                                <div class="serial-number">{{tab.mockSerialNumber}}</div>
+                            </div>
+                        </td>
+                    </tr>
+                </table>
+                <div class="stam">
+                    APPT-SOUP/SAL-ENTREE-VEG/POT-DESSERT-BEV
+                </div>
+                <div class="flex layout vertical handwriting check-body">
+                    <div class="flex" style="position:relative;">
+                        <div style="position:absolute;overflow:hidden; max-height:100%">
+                            <div class="table">
+                                <template is="dom-repeat" items="{{DUMMY_ENTRIES}}">
+                                    <div class="item-row row">
+                                        <div class="cell" width="20%"></div>
+                                        <div class="cell" width="60%"></div>
+                                        <div class="cell" width="20%"></div>
+                                    </div>
+                                </template>
+                            </div>
+                        </div>
+                        <div class="table">
+                            <template is="dom-repeat" items="{{tab.articles}}" as="article">
+                                <div class="item-row row">
+                                    <div class="cell" width="20%">
+                                        <div>
+                                            <iron-icon class="small" style="color:darkgray;cursor:pointer" icon="delete" tag="{{article.sku}}" on-click="onDeleteArticle"></iron-icon>
+                                        </div>
+                                    </div>
+                                    <div class="cell" width="60%" style="text-align:justify"><div>{{article.name}}</div></div>
+                                    <div class="cell" width="20%"><div>{{article.price}}</div></div>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+                    <div>
+                        <table>
+                            <tfoot>
+                                <tr>
+                                    <td width="60%">Tax:</td>
+                                    <td><div>{{tax}}</div></td>
+                                </tr>
+                                <tr>
+                                    <td>Tip:</td>
+                                    <td on-click="stopPropogation">
+                                        <div hidden="{{!active}}" style="color:black;cursor:pointer;position:relative">
+                                            <x-select vertical-align="bottom">
+                                                <paper-button raised class="dropdown-trigger tip-text blue-300">{{tip.text}}</paper-button>
+                                                <ul class="dropdown-content" tabindex="{{tip.no}}">
+                                                    <template is="dom-repeat" items="[[TIPS]]">
+                                                        <li><a href="javascript:void(0)" on-click="onTipSelectionChanged">[[item.text]]</a></li>
+                                                    </template>
+                                                </ul>
+                                            </x-select>
+                                        </div>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td>Total:</td>
+                                    <td><div>{{total}}</div></td>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                </div>
+            </paper-material>
+        </div>
+    </template>
+    <script>
+
+        const TAX = 17 / 100;
+        const DEFAULT_BUSINESS = {
+            name: 'yummlet',
+            placeholder: true,
+            defaultTip: '10%'
+        };
+        Polymer({
+            is: "guest-check",
+            properties: {
+                DUMMY_ENTRIES: {
+                    type: Array,
+                    readOnly: true,
+                    value: function () { return new Array(25); }
+                },
+                TIPS: {
+                    type: Array,
+                    readOnly: true,
+                    value: function () {
+                        return [{
+                            text: '0%',
+                            value: 0,
+                            no: 0
+                        },
+                {
+                    text: '5%',
+                    value: 5,
+                    no: 1
+                },
+                {
+                    text: '10%',
+                    value: 10,
+                    no: 2
+                },
+                {
+                    text: '12%',
+                    value: 12,
+                    no: 3
+                },
+                 {
+                     text: '20%',
+                     value: 20,
+                     no: 4
+                 }
+                        ];
+                    }
+                },
+                business: {
+                    type: Object,
+                    notify: true,
+                    observer: 'onBusinessChange'
+                },
+                tab: {
+                    type: Object,
+                    notify: true,
+                },
+                tip: {
+                    type: Object,
+                    notify: true
+                },
+                total: {
+                    type: String,
+                    notify: true,
+                    computed: 'getTotal(tab.articles.*, tip)'
+                },
+                tax: {
+                    type: String,
+                    notify: true,
+                    computed: 'getTax(tab.articles.*)'
+                },
+                active: {
+                    type: Boolean,
+                    notify: true,
+                    computed: 'isActive(total)'
+                },
+            },
+            observers: [
+                'totalChange(total)',
+            ],
+            ready: function () {
+            },
+            attached: function () {
+                PubSub.subscribe('Tab.article.add', this.onTabArticleAdd.bind(this));
+            },
+            onBusinessChange: function () {
+                this.tip = this.findTip(this.business.defaultTip);
+                this.set('tab', CommonModule.modules.tab.current.get());
+            },
+            onTabArticleAdd: function (msg, data) {
+                this.debounce('onTabChange', function () {
+                    var lastIndex = this.tab.articles.length;
+                    if (lastIndex) {
+                        this.notifySplices('tab.articles', [{
+                            index: lastIndex-1,
+                            addedCount: 1,
+                            removed: [],
+                            object: data.article
+                        }]);
+                    }
+                }.bind(this), 100);
+            },
+            onTipSelectionChanged: function (event) {
+                this.tip = this.findTip(event.target.text);
+            },
+            findTip: function (tipText) {
+                return _.find(this.TIPS, function (tip) {
+                    return tip.text == tipText;
+                }.bind(this));
+            },
+            activateSpinner: function (active) {
+                this.$.spinner.active = active;
+                this.$.spinner.hidden = !active;
+            },
+            onDeleteArticle: function (event) {
+                this.stopPropogation(event);
+                var index = _.findIndex(this.tab.articles, function (article) {
+                    return article.sku == event.target.tag;
+                }.bind(this));
+                var articleToRemove = this.tab.articles[index];
+                CommonModule.modules.tab.removeArticle(this.business, articleToRemove);
+                this.notifySplices('tab.articles', [{
+                    index: index,
+                    addedCount: 0,
+                    removed: [articleToRemove],
+                }]);
+            },
+            getTotal: function () {
+                return CommonModule.modules.tab.computePrice(1 + this.tip.value / 100, this.tab.articles);
+            },
+            getTax: function () {
+                return CommonModule.modules.tab.computePrice(TAX / (1 + TAX), this.tab.articles);
+            },
+            isActive: function () {
+                return this.total != "";
+            },
+            stopPropogation: function (event) {
+                event.dontFireCheckClick = true;
+            },
+            totalChange: function (total) {
+                var tab = CommonModule.modules.tab.current.get();
+                if (tab) {
+                    tab.total = total;
+                    tab.tip = CommonModule.modules.tab.computePrice(this.tip.value / 100, this.tab.articles);
+                }
+            }
+        });
+    </script>
+</dom-module>

@@ -1,0 +1,54 @@
+﻿
+<dom-module id="account-logout">
+
+    <template>
+        <link rel="import" type="css" href="../../web.common/styles/shared-by-elements.css">
+
+        <style>
+        </style>
+        <div class="layout vertical center">
+            <iron-image class="circular-avatar-big" sizing="cover" preload fade src="{{profilePicture}}"></iron-image>
+            <paper-material>
+                <h4>Welcome <span>{{profile.name}}</span>,</h4>
+                <p>{{getConnectionMethod(profile)}}</p>
+                <paper-button raised class="blue-300" on-click="onLogOut" style="display:block">log out</paper-button>
+            </paper-material>
+        </div>
+    </template>
+    <script>
+        Polymer({
+            is: "account-logout",
+            properties: {
+                profilePicture: {
+                    type: String,
+                    notify: true,
+                    value: function () { return "";}
+                },
+                profile: {
+                    type: Object,
+                    notify: true,
+                    value: function () { return {}; }
+                }
+            },
+            ready: function () {
+            },
+            attached: function () {
+                PubSub.subscribe('User.logged.in', this.updateValues.bind(this));
+                this.updateValues();
+            },
+            updateValues: function () {
+                if (!CommonModule.modules.user.current.is()) return;
+                this.profile = CommonModule.modules.user.current.profile();
+                this.profilePicture = CommonModule.modules.user.current.image();
+                },
+            onLogOut: function(){
+                CommonModule.modules.user.logOut();
+            },
+            getConnectionMethod: function () {
+                if (!CommonModule.modules) return;
+                return "You're currently signed in using " + CommonModule.modules.user.current.friendlyHow();
+            }
+        });
+
+    </script>
+</dom-module>

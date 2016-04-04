@@ -1,0 +1,25 @@
+﻿html.full(lang='en')
+  head
+    meta(charset='utf-8')
+    meta(http-equiv='X-UA-Compatible', content='IE=edge')
+    meta(name='viewport', content='width=device-width, initial-scale=1, maximum-scale=1')
+    meta(name='description', content='')
+    meta(name='author', content='')
+    title #{title}
+    // Bootstrap Core CSS
+    link(rel="stylesheet", href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.5/css/bootstrap.min.css", async)
+    link(rel="stylesheet", href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.5/css/bootstrap-theme.min.css", async)
+    link(href='/public/css/fixed-page-styles.css', rel='stylesheet', async)
+    script(src="https://ajax.googleapis.com/ajax/libs/jquery/2.1.4/jquery.min.js")
+    script(src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.5/js/bootstrap.min.js")    
+  
+  body.full(style="padding: 20%;background-image: linear-gradient(rgba(255,255,255,0.5),rgba(255,255,255,0.5)), url('/public/images/invalid.png')")
+    block content
+    block button
+    div(style="position:fixed; bottom:3vh; left:0; right:0; margin:auto; font-size: xx-small")
+        p. 
+          At #[a(href="yummlet.com") yummlet.com] we strive to provide a new way of eating out. 
+          Share reviews, photos and pretty much anything else related to restaurants and similar attractions.
+
+
+

@@ -1,0 +1,101 @@
+﻿<dom-module id="review-section">
+
+    <template>
+        <link rel="import" type="css" href="../../web.common/styles/shared-by-elements.css">
+
+        <style>
+            .review-info{
+                color:gray;
+            }
+
+            .review-info span{
+                margin: auto 10px;
+                font-size:xx-small;
+            }
+            .star{
+                --iron-icon-stroke-color: darkgray;
+                --iron-icon-fill-color: gold;
+            }
+        </style>
+        <div style="display:block; width:100%; text-align:center">
+            <template is="dom-repeat" items="{{getStars(business.rating)}}" as="star">
+                <iron-icon class="star" icon="{{star}}" style="width:50px; height:50px"></iron-icon>
+            </template>
+        </div>
+        <template is="dom-repeat" items="{{reviews}}" as="review">
+            <paper-material class="with-margins">
+                <div style="display:block; text-align:center;margin-bottom:20px;">
+                    <template is="dom-repeat" items="{{getStars(review.rating)}}" as="star">
+                        <iron-icon class="star" icon="{{star}}"></iron-icon>
+                    </template>
+                </div>
+                <div class="full layout horizontal">
+                    <paper-material class="circular-avatar-xsmall" style$="{{getImageStyle(review.avatar)}}"></paper-material>
+                    <div class="full layout vertical">
+                        <div class="full layout horizontal">
+                            <a href="{{review.author_url}}" target="_blank">{{review.author_name}}</a>
+                            <span class="flex"></span>
+                            <div class="layout vertical" style="float:right">
+                                <div class="review-info layout horizontal">
+                                    <iron-icon icon="device:access-time"></iron-icon>
+                                    <span>{{formatTime(review.time)}}</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div style="padding: 10px 10px 10px 30px">{{review.text}}</div>
+                    </div>
+                </div>
+            </paper-material>
+        </template>
+    </template>
+    <script>
+        var MAX_RATING = 5;
+        Polymer({
+            is: "review-section",
+            properties: {
+                business: {
+                    type: Object,
+                    notify: true,
+                    reflectToAttribute: true,
+                    observer: 'onBusinessChange'
+                },
+                reviews: {
+                    type: Array,
+                    notify: true,
+                    reflectToAttribute: true
+                }
+            },
+            ready: function () {
+            },
+            attached: function () {
+            },
+            onBusinessChange: function () {
+                this.populateReviews();
+            },
+            getImageStyle: function (avatar) {
+                avatar = avatar || '/public/images/unknown_user.png';
+                return 'background: center center /cover no-repeat url(' + avatar + ');';
+            },
+            getStars: function (rating) {
+                var result = [];
+                for (var i = 0; i < ~~rating; i++)
+                    result.push('star');
+                if (rating % 1) //fraction
+                    result.push('star-half');
+                while (result.length < MAX_RATING)
+                    result.push('star-border');
+                return result;
+            },
+            populateReviews: function () {
+                this.reviews = [].concat(this.business.googleReviews || [], this.business.reviews || []);
+            },
+            formatTime: function (time) {
+                return (new Date(time)).toDateString();
+            },
+            formatLanguage: function (lang) {
+                return lang.toUpperCase();
+            }
+        });
+
+    </script>
+</dom-module>

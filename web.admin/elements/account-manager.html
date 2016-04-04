@@ -1,0 +1,84 @@
+﻿<link rel="import" href="../../web.common/elements/account-login.html">
+<link rel="import" href="../../web.common/elements/account-logout.html">
+
+<dom-module id="account-manager">
+    <template>
+        <link rel="import" type="css" href="../../web.common/styles/shared-by-elements.css">
+        <style>
+           paper-dialog{
+               padding: 0;
+               margin: 0;
+               --paper-dialog-background-color:rgba(230,230,230,0.5);
+           }
+        </style>
+        <paper-dialog id="accountDialog" modal auto-fit-on-attach no-cancel-on-esc-key
+                    entry-animation="scale-up-animation"
+                    exit-animation="scale-down-animation">
+            <account-login require-code-on-registration
+                           bg="white" login-only disable-social-login></account-login>
+        </paper-dialog>
+    </template>
+    <script>
+        Polymer({
+            is: "account-manager",
+            properties: {
+                isLoggedIn: {
+                    type: Boolean,
+                    notify: true,
+                    value: function () { return false; }
+                },
+                backdrop: {
+                    type: String,
+                    notify: true
+                },
+                backdropElement: {
+                    type: Object,
+                    notify: true
+                }
+            },
+            ready: function () {
+                PubSub.subscribe('User.logged', this.onSessionChange.bind(this));
+                $('body').bind("cut copy paste", function (e) {
+                    if (!CommonModule.modules.user.current.is())
+                        e.preventDefault();
+                }.bind(this));
+            },
+            attached: function () {
+                this.setupBackdrop();
+                this.onSessionChange();
+            },
+            setupBackdrop: function () {
+                if (this.backdrop) {
+                    this.backdropElement = $(this.backdrop)[0];
+                    this.backdropElement.ontouchstart = function (e) {
+                        if (!CommonModule.modules.user.current.is())
+                            e.preventDefault();
+                    };
+                    this.backdropElement.ontouchmove = function (e) {
+                        if (!CommonModule.modules.user.current.is())
+                            e.preventDefault();
+                    }
+                }
+            },
+            toggleBackdropState: function () {
+                if (this.backdrop && this.backdropElement) {
+                    this.toggleClass('blurred', !this.isLoggedIn, this.backdropElement);
+                    this.backdropElement.disabled = !this.isLoggedIn;
+                    var dialog = this.$.accountDialog;
+                    if (!this.isLoggedIn)
+                        dialog.open();
+                    else
+                        dialog.close();
+                }
+            },
+            onArticleCountChange: function () {
+                    this.isBasketEmpty = !CommonModule.modules.tab.current.count();
+            },
+            onSessionChange: function (msg, value) {
+                this.isLoggedIn = CommonModule.modules.user.current.is();
+                this.toggleBackdropState();
+            },
+        });
+
+    </script>
+</dom-module>

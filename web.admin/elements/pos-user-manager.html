@@ -1,0 +1,75 @@
+﻿<dom-module id="pos-user-manager">
+    <template>
+        <link rel="import" type="css" href="../../web.common/styles/shared-by-elements.css">
+        <style>
+            :host {
+                display: block;
+                padding: 25px;
+            }
+            paper-fab{
+                width:80px;
+                height:80px;
+                margin:20px 35px 50px;
+            }
+            add-button{
+
+            }
+        </style>
+        <div hidden$="{{!listMode}}" class="fullbleed horizontal layout wrap">
+            <template is="dom-repeat" items="{{users}}" as="user">
+                    <user-avatar user="{{user}}" on-click="onUserSelected"></user-avatar>
+            </template>
+            <paper-fab icon="social:person-add" on-click="onAddUser"></paper-fab>
+        </div>
+        <div hidden$="{{listMode}}" class="vertical layout center">
+            <pos-user id="userView" on-close="onUserUnselected"></pos-user>
+        </div>
+    </template>
+    <script>
+        Polymer({
+            is: "pos-user-manager",
+            properties: {
+                users: {
+                    type: Array,
+                    notify: true,
+                    value: function () { return []; }
+                },
+                listMode: {
+                    type: Boolean,
+                    notify: true,
+                    value: function () { return true;}
+                }
+            },
+            ready: function () {
+                PubSub.subscribe('App.ready', function () {
+                    this.async(function () {
+                        this.updateUsers();
+                    }.bind(this));
+                }.bind(this));
+                PubSub.subscribe('UserManager.end', function (msg, user) {
+                    this.updateUsers();
+                }.bind(this));
+
+            },
+            attached: function () {
+            },
+            updateUsers: function () {
+                var users = CommonModule.modules.user_manager.get();
+                this.splice.apply(this, ['users', 0, this.users.length].concat(users));
+            },
+            onUserSelected: function (event) {
+                this.$.userView.load(event.currentTarget.user);
+                this.listMode = false;
+            },
+            onUserUnselected: function (event) {
+                CommonModule.modules.user_manager.refresh();
+                this.listMode = true;
+            },
+            onAddUser: function (event) {
+                event.currentTarget.user = { is: 'ADD-USER', name: 'New User', _internal_comment: '-', phone_number: 972526789237 };
+                this.onUserSelected(event);
+            }
+        });
+
+    </script>
+</dom-module>

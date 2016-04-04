@@ -1,0 +1,266 @@
+﻿<link rel="import" href="animated-grid.html">
+<link rel="import" href="../../web.common/elements/error-card.html">
+<link rel="import" href="menu-section.html">
+<link rel="import" href="menu-browser.html">
+<link rel="import" href="checkout-page.html">
+<link rel="import" href="account-manager.html">
+<dom-module id="cafe-view">
+
+    <template>
+        <link rel="import" type="css" href="../../web.common/styles/shared-by-elements.css">
+        <link rel="import" type="css" href="../../web.common/styles/business-sections.css">
+
+        <style>
+            @media (min-width: 601px) {
+                .padded {
+                    padding: 48px 62px;
+                }
+            }
+
+            :host {
+                display: block;
+            }
+
+            paper-fab.backbutton {
+                width: 32px;
+                height: 32px;
+                color: white !important;
+                opacity: 0.6;
+                --paper-fab-background: var(--paper-blue-300);
+            }
+
+            paper-fab.backbutton[disabled] {
+                color: gray !important;
+                --paper-fab-disabled-background: var(--paper-gray-700);
+            }
+
+            .padding-bottom:after{
+                padding-bottom: 40px !important;
+            }
+        </style>
+        <paper-spinner id="spinner" hidden></paper-spinner>
+        <neon-animated-pages class="fixed" id="pages" selected="[[selection]]"
+                             entry-animation="{{entryAnimation}}" exit-animation="{{exitAnimation}}" on-iron-deselect="onDeselected">
+            <div class="padded">
+                <animated-grid id="places-id" class="padding-bottom"></animated-grid>
+            </div>
+            <div class="padded">
+                <error-card id="error-card-id"></error-card>
+            </div>
+            <div id="menu-section-ph" class="padding-bottom"></div>
+            <div id="menu-browser-ph" class="padding-bottom"></div>
+            <div class="padded">
+                <account-manager id="account-id" class="padding-bottom" on-back-click="_onBackClick"></account-manager>
+            </div>
+            <div class="padded">
+                <checkout-page id="checkout-id" class="padding-bottom" on-back-click="_onBackClick"></checkout-page>
+            </div>
+            <div id="gallery-section-ph" class="padding-bottom"></div>
+            <div id="review-section-ph" class="padding-bottom"></div>
+        </neon-animated-pages>
+    </template>
+    <script>
+
+        var i = 0;
+        const GRID_PAGE = i++;
+        const ERROR_PAGE = i++;
+        const MENU_SECTION_PAGE = i++;
+        const MENU_BROWSER_PAGE = i++;
+        const ACCOUNT_PAGE = i++;
+        const CHECKOUT_PAGE = i++;
+        const GALLERY_SECTION_PAGE = i++;
+        const REVIEW_SECTION_PAGE = i++;
+
+        const ENTRY = "slide-from-right-animation";
+        const EXIT = "slide-left-animation";
+        const BACK_ENTRY = "slide-from-left-animation";
+        const BACK_EXIT = "slide-right-animation";
+        var wasBackClick = false;
+        Polymer({
+            is: "cafe-view",
+            properties: {
+                selection: {
+                    type: Number,
+                    notify: true,
+                    value: function () { return 0; },
+                    observer: 'onSelectionChanged'
+                },
+                entryAnimation: {
+                    type: String,
+                    notify: true,
+                    value: function () { return ENTRY; }
+                },
+                exitAnimation: {
+                    type: String,
+                    notify: true,
+                    value: function () { return EXIT; }
+                },
+                backHistory: {
+                    type: Array,
+                    notify: true,
+                    value: function () { return []; },
+                },
+            },
+            observers: [
+                //'isBackEnabled(backHistory.length)'
+            ],
+            ready: function () {
+                PubSub.subscribe('Geolocation.notAvailable', this.onGeolocationNotAvailable.bind(this));
+                PubSub.subscribe('Business.fetch.end', this.onSearchEnded.bind(this));
+
+                PubSub.subscribe('neonpages.MenuSection', this.onSelectionChange.bind(this, MENU_SECTION_PAGE));
+                PubSub.subscribe('neonpages.GallerySection', this.onSelectionChange.bind(this, GALLERY_SECTION_PAGE));
+                PubSub.subscribe('neonpages.ReviewSection', this.onSelectionChange.bind(this, REVIEW_SECTION_PAGE));
+                PubSub.subscribe('neonpages.MenuBrowser', this.onSelectionChange.bind(this, MENU_BROWSER_PAGE));
+                PubSub.subscribe('neonpages.Checkout', this.onSelectionChange.bind(this, CHECKOUT_PAGE));
+                PubSub.subscribe('neonpages.Account', this.onSelectionChange.bind(this, ACCOUNT_PAGE));
+                PubSub.subscribe('neonpages.Grid', function (msg, name) {
+                    this.onSelectionChange(GRID_PAGE);
+                    this.$['places-id'].refreshMap();
+                }.bind(this));
+            },
+            attached: function () {
+                this.async(function () { window.dispatchEvent(new Event('PolymerElementsLoaded')) }.bind(this));
+                PubSub.subscribe('Business.current', this.onCurrentBusinessReceived.bind(this));
+            },
+            onCurrentBusinessReceived: function (msg, business) {
+                this.business = business;
+                var menuSection = this.querySelector('#menuSection');
+                if (menuSection) {
+                    menuSection.business = this.business;
+                }
+                var menuBrowser = this.querySelector('#menuBrowser');
+                if (menuBrowser) {
+                    menuBrowser.menu = CommonModule.modules.menu.current.get();
+                }
+                var gallerySection = this.querySelector('#gallerySection');
+                if (gallerySection) {
+                    gallerySection.business = this.business;
+                }
+                var reviewSection = this.querySelector('#reviewSection');
+                if (reviewSection) {
+                    reviewSection.business = this.business;
+                }
+
+                this.$['checkout-id'].business = this.business;
+            },
+            onSearchEnded: function () {
+                if (this.$['places-id'].places.length < 1) {
+                    this.$['error-card-id'].title = 'No nearby places found';
+                    this.$['error-card-id'].message = 'Try extending your search radius.';
+                    this.onSelectionChange(ERROR_PAGE);
+                }
+            },
+            onGeolocationNotAvailable: function () {
+                this.$['error-card-id'].title = 'Geolocation not available';
+                this.$['error-card-id'].message = 'Check application permission or internet connectivity.';
+                this.onSelectionChange(ERROR_PAGE);
+            },
+            onSelectionChange: function (selection) {
+                if (this.selected == selection && this.$.pages.items[selection].innerHTML) return;
+
+                this.clearAll();
+                switch(selection)
+                {
+                    case MENU_SECTION_PAGE:
+                        this.injectMenuSection();
+                        break;
+                    case MENU_BROWSER_PAGE:
+                        this.injectMenuBrowser();
+                        break;
+                    case GALLERY_SECTION_PAGE:
+                        this.injectGallerySection();
+                        break;
+                    case REVIEW_SECTION_PAGE:
+                        this.injectReviewSection();
+                        break;
+                }
+                this.selection = selection;
+            },
+            injectReviewSection(){
+                var elem = document.createElement("review-section");
+                elem.id = 'reviewSection';
+                elem.business = CommonModule.modules.business.current.get();
+                this.$["review-section-ph"].appendChild(elem);
+            },
+            injectMenuSection() {
+                var elem = document.createElement("menu-section");
+                elem.id = 'menuSection';
+                elem.business = CommonModule.modules.business.current.get();
+                this.$["menu-section-ph"].appendChild(elem);
+            },
+            injectMenuBrowser() {
+                var elem = document.createElement("menu-browser");
+                elem.id = 'menuBrowser';
+                elem.menu = CommonModule.modules.menu.current.get();
+                this.$["menu-browser-ph"].appendChild(elem);
+            },
+            injectGallerySection() {
+                var elem = document.createElement("photo-gallery");
+                elem.id = 'gallerySection';
+                elem.client = true;
+                elem.business = CommonModule.modules.business.current.get();
+                this.$["gallery-section-ph"].appendChild(elem);
+            },
+            clearAll() {
+                clearElement.bind(this, "menu-section-ph")();
+                clearElement.bind(this, "menu-browser-ph")();
+                clearElement.bind(this, "gallery-section-ph")();
+                clearElement.bind(this, "review-section-ph")();
+
+                function clearElement(id) {
+                    var myNode = this.$[id];
+                    while (myNode.firstChild) {
+                        myNode.removeChild(myNode.firstChild);
+                    }
+                }
+            },
+            //isBackEnabled: function (value) {
+            //    this.$.backButton.disabled = !value;
+            //},
+            onBackClick: function (event) {
+                var customBack = this.$.pages.selectedItem.onBackClick;
+                if (customBack)
+                    return (customBack.bind(this.$.pages.selectedItem.this))();
+
+                this._onBackClick(event);
+            },
+            _onBackClick: function (event) {
+                if (!this.backHistory.length) return;
+                this.entryAnimation = BACK_ENTRY;
+                this.exitAnimation = BACK_EXIT;
+
+                wasBackClick = true;
+                this.selection = this.pop('backHistory');
+
+                setTimeout(function () {
+                    this.entryAnimation = ENTRY;
+                    this.exitAnimation = EXIT;
+                }.bind(this), 500);
+            },
+            onSelectionChanged: function () {
+                PubSub.publish('app.scrollToTop');
+                switch (this.selection) {
+                    case MENU_SECTION_PAGE:
+                        return enableScroll(false);
+                    default:
+                        enableScroll(true);
+                }
+            },
+            onDeselected: function (event, moreinfo) {
+                var prev = event.target._prevSelected;
+                if (!wasBackClick)
+                    this.push('backHistory', prev);
+                wasBackClick = false;
+            },
+            onNavClick: function (event) {
+                this.onNavClickAux(event.currentTarget)
+            }
+        });
+
+        function enableScroll(enable) {
+            $('#mainContainer').css('overflow', enable ? 'auto' : 'hidden');
+        }
+
+    </script>
+</dom-module>

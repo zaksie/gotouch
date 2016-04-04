@@ -1,0 +1,54 @@
+﻿
+<dom-module id="nav-item">
+
+    <template>
+        <link rel="import" type="css" href="../../web.common/styles/shared-by-elements.css">
+
+        <style>
+            :host {
+                width: 150px;
+                height: 150px;
+                padding:0;
+                display: flex;
+                text-align: center;
+                cursor:pointer;
+            }
+            .item-name{
+                display:block;
+                font-weight:bold;
+                margin:2px 0;
+            }
+            .icon{
+                width:32px;
+                height:32px;
+            }
+        </style>
+            <paper-button class="rectangular-avatar-medium vertical layout center center-justified" raised style$="{{getButtonStyle(item)}}">
+                <div>
+                    <iron-icon class="icon" icon="{{item.icon}}"></iron-icon>
+                    <p class="item-name">{{item.name}}</p>
+                </div>
+            </paper-button>
+    </template>
+    <script>
+        Polymer({
+            is: "nav-item",
+            properties: {
+                item: {
+                    type: Object,
+                    notify: true,
+                },
+            },
+            ready: function () {
+            },
+            attached: function () {
+            },
+            getButtonStyle: function (item) {
+                if (!item.colors) return;
+                return 'background-color: ' + item.colors.bg + '; color:' + item.colors.fg;
+            }
+
+        });
+
+    </script>
+</dom-module>

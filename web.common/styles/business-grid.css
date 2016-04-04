@@ -1,0 +1,110 @@
+.grid {
+    padding: 0;
+    -webkit-flex-wrap: wrap; /* Safari 6.1+ */
+    display: flex;
+    -ms-flex-wrap: wrap;
+    flex-wrap: wrap;
+    -ms-flex-direction: row;
+    -webkit-flex-direction: row;
+    flex-direction: row;
+    -ms-align-content: flex-start;
+    -webkit-align-content: flex-start;
+    align-content: flex-start;
+    justify-content: flex-start;
+}
+
+.grid-item-size {
+    min-width: 100px;
+    width: 100px;
+    max-width: 140px;
+    min-height: 155px;
+    height: 155px;
+    max-height: 155px;
+}
+
+.grid-item{
+        -moz-box-sizing: border-box;
+    -webkit-box-sizing: border-box;
+    box-sizing: border-box;
+        margin: 1px 1px 5px;
+    cursor: pointer;
+    -ms-flex: 1 1 100px;
+    -webkit-flex: 1 1 100px;
+    flex: 1 1 100px;
+}
+
+
+
+@media (min-width: 641px) {
+    .grid-item {
+        min-width: 100px;
+        margin: 5px;
+    }
+
+    .grid {
+        padding: 10px;
+    }
+}
+
+.map-info-window {
+    min-width: 150px;
+    min-height: 150px;
+    max-width: 300px;
+    max-height: 300px;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    -moz-box-sizing: border-box;
+    -webkit-box-sizing: border-box;
+    box-sizing: border-box;
+}
+
+
+paper-card {
+    text-align: center;
+    --paper-card-header-text: {
+    text-transform: uppercase;
+    -ms-text-overflow: ellipsis;
+    -o-text-overflow: ellipsis;
+    text-overflow: ellipsis;
+    font-size: xx-small;
+    padding: 5px 0 0;
+    margin: 0;
+    vertical-align: central;
+    font-family: Tahoma;
+    font-weight: bold;
+    background: linear-gradient(rgba(0,0,0, 0.3),rgba(0,0,0, 0.3));
+    width: auto;
+    height: 35px;
+    bottom: 4px;
+    left: 0;
+    right: 0;
+    color: white;
+}
+
+--paper-card-header-image: {
+    height: 90px;
+    --iron-image-height: 100%;
+}
+
+--paper-card-actions: {
+    height: 80%;
+}
+
+}
+
+.stars, .stars span {
+    display: block;
+    background: url(../../public/images/small-stars.png) 0 -12px repeat-x;
+    width: 60px;
+    height: 12px;
+}
+
+    .stars span {
+        background-position: 0 0;
+    }
+
+.stars-div {
+    position: absolute;
+    top: -0.5px;
+}

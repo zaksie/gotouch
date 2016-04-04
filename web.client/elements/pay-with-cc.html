@@ -1,0 +1,54 @@
+﻿<link rel="import" href="credit-card-form.html">
+
+<dom-module id="pay-with-cc">
+    <template>
+        <link rel="import" type="css" href="../../web.common/styles/shared-by-elements.css">
+        <link rel="import" type="css" href="../styles/payment-button.css">
+        <style>
+        </style>
+        <div>
+            <credit-card-form class="hidden-animation" hidden="{{!getButtonState(isCCClick, enabled)}}" on-close="onCCClose"></credit-card-form>
+            <paper-button class="hidden-animation yellow-300" raised id="cc-button" alt="" on-click="onCCClick"
+                          hidden="{{getButtonState(isCCClick, enabled)}}" disabled="{{getDisabledState(enabled)}}">
+                <div class="layout horizontal">
+                    <iron-icon icon="credit-card"></iron-icon>
+                    <span class="flex" style="text-align:center">Pay with credit card</span>
+                </div>
+            </paper-button>
+        </div>
+    </template>
+    <script>
+
+        Polymer({
+            is: "pay-with-cc",
+            properties: {
+                isCCClick: {
+                    type: Boolean,
+                    notify: true,
+                    value: function () { return false; }
+                },
+                enabled: {
+                    type: Boolean,
+                    notify: true,
+                },
+            },
+            ready: function () {
+            },
+            onCCClick: function () {
+                this.isCCClick = true;
+                this.fire('cc-selected', true);
+            },
+            onCCClose: function () {
+                this.isCCClick = false;
+                this.fire('cc-selected', false);
+            },
+            getButtonState: function () {
+                return this.enabled && this.isCCClick;
+            },
+            getDisabledState: function () {
+                var disabled = !this.enabled;
+                return disabled;
+            }
+        });
+    </script>
+</dom-module>

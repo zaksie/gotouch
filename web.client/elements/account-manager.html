@@ -1,0 +1,54 @@
+﻿<link rel="import" href="../../web.common/elements/account-login.html">
+<link rel="import" href="../../web.common/elements/account-logout.html">
+<link rel="import" href="fast-checkout-button.html">
+
+<dom-module id="account-manager">
+    <template>
+        <link rel="import" type="css" href="../../web.common/styles/shared-by-elements.css">
+        <style>
+
+        </style>
+        <div style="max-width:400px; width: 100%; left:0;right:0; margin:auto">
+            <div hidden$="{{isLoggedIn}}">
+                <div hidden$="{{isBasketEmpty}}" style="display:block">
+                    <fast-checkout-button></fast-checkout-button>
+                    <h1 id="firstOr" class="divider">OR</h1>
+                </div>
+                <account-login></account-login>
+            </div>
+            <div hidden$="{{!isLoggedIn}}"><account-logout></account-logout></div>
+        </div>
+    </template>
+    <script>
+        Polymer({
+            is: "account-manager",
+            properties: {
+                isLoggedIn: {
+                    type: Boolean,
+                    notify: true,
+                    value: function () { return false; }
+                },
+                isBasketEmpty: {
+                    type: Boolean,
+                    notify: true,
+                    value: function () { return true; }
+                }
+            },
+            ready: function () {
+            },
+            attached: function () {
+                PubSub.subscribe('User.logged', this.onSessionChange.bind(this))
+                PubSub.subscribe('Tab.article.count', this.onArticleCountChange.bind(this));
+                this.onArticleCountChange();
+                this.onSessionChange();
+            },
+            onArticleCountChange: function () {
+                    this.isBasketEmpty = !CommonModule.modules.tab.current.count();
+            },
+            onSessionChange: function () {
+                this.isLoggedIn = CommonModule.modules.user.current.is();
+            },
+        });
+
+    </script>
+</dom-module>

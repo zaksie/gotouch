@@ -1,0 +1,51 @@
+﻿            onTabsChange: function () {
+                setTimeout(function () {
+                    interact('.draggable')
+                .draggable({
+                    // enable inertial throwing
+                    inertia: true,
+                    // keep the element within the area of it's parent
+                    restrict: {
+                        restriction: "parent",
+                        endOnly: true,
+                        elementRect: { top: 0, left: 0, bottom: 1, right: 1 }
+                    },
+                    // enable autoScroll
+                    autoScroll: true,
+
+                    // call this function on every dragmove event
+                    onmove: this.onTrack,
+                    // call this function on every dragend event
+                    onend: this.onTrackEnd
+                });
+                }.bind(this), 1000);
+            },
+            onTrack: function (event) {
+                var e = event;
+                var target = event.target;
+                e.preventDefault();
+
+                var x = (parseFloat(target.getAttribute('data-x')) || 0) + event.dx;
+                var y = (parseFloat(target.getAttribute('data-y')) || 0) + event.dy;
+
+                // translate the element
+                target.style.webkitTransform =
+                target.style.transform =
+                  'translate(' + x + 'px, ' + y + 'px)';
+
+                // update the posiion attributes
+                target.setAttribute('data-x', x);
+                target.setAttribute('data-y', y);
+            },
+            onTrackEnd: function (event) {
+                var target = event.target;
+
+            },
+            onMouseDown: function (event) {
+                var target = event.currentTarget;
+                target.style.zIndex += 1;
+
+            },
+            onMouseUp: function (event) {
+
+            }

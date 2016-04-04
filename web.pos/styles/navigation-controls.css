@@ -1,0 +1,17 @@
+﻿.control-buttons {
+    right: 0;
+    position: fixed;
+    z-index: 2 !important;
+    top: 20%;
+    margin:0 !important;
+}
+
+.control-buttons paper-icon-button {
+    color: white;
+    background: black;
+    opacity: 0.6;
+}
+
+.control-buttons paper-icon-button:hover {
+    opacity: 1;
+}

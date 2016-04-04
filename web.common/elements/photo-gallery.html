@@ -1,0 +1,434 @@
+﻿
+<dom-module id="photo-gallery">
+
+    <template>
+        <link rel="import" type="css" href="../../web.common/styles/shared-by-elements.css">
+        <link rel="import" type="css" href="../../web.common/styles/photo-gallery.css">
+        <link rel="import" type="css" href="../../web.common/styles/business-sections.css">
+
+        <style>
+            :host {
+                overflow: hidden;
+                position: relative;
+            }
+
+            paper-button {
+                display: block;
+                width: 100%;
+                text-align: left;
+            }
+
+            .section-name {
+                margin-left: 50px;
+                font-size: large;
+                color: darkgray;
+                font-weight: bolder;
+            }
+
+
+            .context-menu {
+                background-color: whitesmoke;
+                position: fixed;
+                z-index: 2;
+                visibility: hidden;
+                box-shadow: 5px 5px 2.5px #888888;
+                -moz-transition: visibility .2s ease-in-out;
+                -o-transition: visibility .2s ease-in-out;
+                -webkit-transition: visibility .2s ease-in-out;
+                transition: visibility .2s ease-in-out;
+            }
+
+                .context-menu paper-icon-item {
+                    font-size: xx-small;
+                }
+
+            .selectable {
+                cursor: pointer;
+            }
+
+                .selectable:hover {
+                    background: rgba(0,0,255,0.2);
+                }
+            .leaveContextMenuOpen {
+            }
+        </style>
+        <div style="position:relative; overflow-y:auto">
+            <template is="dom-repeat" items="{{sections}}" as="section">
+                <template is="dom-if" if="{{!client}}">
+                    <paper-button on-click="onToggle">
+                        <iron-icon icon="{{getSectionIcon(section.open)}}"></iron-icon>
+                        <span class="section-name">{{section.name}}</span>
+                    </paper-button>
+                </template>
+                <iron-collapse opened="{{section.open}}">
+                    <template is="dom-if" if="{{!section.photos.length}}">
+                    </template>
+                    <div class="layout horizontal center-justified wrap">
+                        <template is="dom-repeat" items="{{section.photos}}" as="photo">
+                            <template is="dom-if" if="{{isImageValid(photo.type, photo.removed)}}">
+                                <paper-material class="image layout vertical center" on-contextmenu="onRightClick" style$="{{getPhotoStyle(photo.visible)}}">
+                                    <iron-image src="{{photo.image}}" width="200" height$="{{getPhotoHeight(photo)}}" placeholder="/public/images/loading-small.gif" preload fade on-click="onPictureClick" sizing="cover"></iron-image>
+                                    <paper-textarea label="Photo label" readonly$="{{canEdit(photo)}}" max-rows="3" value="{{photo.title}}" style="display:block; width:100%"></paper-textarea>
+                                    <div class="layout horizontal wrap">
+                                        <template is="dom-repeat" items="{{photo.tags}}" as="tagtext">
+                                            <div class="chip layout horizontal center center-justified" style$="{{getRandomColor(tagtext)}}">
+                                                <div style="white-space:nowrap; margin:2px 0">{{tagtext}}</div>
+                                                <paper-icon-button icon="remove-circle" hidden$={{canEdit(photo)}} on-click="onDeleteTag" style="color:hotpink"></paper-icon-button>
+                                            </div>
+                                        </template>
+                                    </div>
+                                </paper-material>
+                                <template is="dom-if" if="{{!photo.visible}}">
+                                    <iron-icon icon="visibility-off" style="position:absolute; top:10%; left:10%"></iron-icon>
+                                </template>
+                            </template>
+                        </template>
+                    </div>
+                    <template is="dom-if" if="{{canUpload(section)}}">
+                        <div class="fullbleed layout vertical">
+                            <div class="layout horizontal center-justified wrap">
+                                <template is="dom-repeat" items="{{previews}}" as="preview">
+                                    <div>
+                                        <paper-material class="image layout vertical center" style="background:cornflowerblue">
+                                            <iron-image src="{{preview.image}}" placeholder="/public/images/loading-small.gif" preload width="200" height$="{{getPhotoHeight(preview.image)}}" sizing="cover" fade style="margin:20px"></iron-image>
+                                            <paper-badge class="badge" label="X" on-click="removeFile"></paper-badge>
+                                        </paper-material>
+                                    </div>
+                                </template>
+                            </div>
+                            <div id="uploadControls" class="layout horizontal center-justified">
+                                <paper-fab id="addPhotos" style="margin:10px" src="/public/images/ic_add_a_photo_white_24px.svg" on-click="onAddPhotosClick"></paper-fab>
+                                <paper-fab id="uploadPhotos" disabled="{{!files.length}}" style="margin:10px" icon="file-upload" on-click="onUploadPhotosClick"></paper-fab>
+                            </div>
+                        </div>
+                    </template>
+                </iron-collapse>
+            </template>
+        </div>
+        <paper-menu id="contextMenu" class="context-menu" selectable=".selectable">
+            <paper-icon-item class="selectable">
+                <iron-icon icon="add" item-icon></iron-icon>
+                Add tag
+            </paper-icon-item>
+            <paper-icon-item hidden$="{{client}}" class="selectable" on-click="onChangeVisibility">
+                <iron-icon icon="{{getPhotoVisibilityIcon(selectedPhoto.visible)}}" item-icon></iron-icon>
+                <span>{{getPhotoVisibilityText(selectedPhoto.visible)}}</span>
+            </paper-icon-item>
+            <paper-icon-item hidden$="{{!canDelete(photo}}" class="selectable" on-click="onDeletePhoto">
+                <iron-icon icon="remove-circle" item-icon></iron-icon>
+                Delete
+            </paper-icon-item>
+            <template is="dom-if" if="{{!client}}">
+                <div class="separator" style="width:80%;left:0;right:0; margin:auto"></div>
+                <paper-icon-item class="leaveContextMenuOpen">
+                    <paper-checkbox id="facebook-check"></paper-checkbox>
+                    <iron-icon src="/public/images/facebook_icon_small.jpg" item-icon></iron-icon>
+                    Upload to Facebook
+                </paper-icon-item>
+            </template>
+        </paper-menu>
+        <input id="uglyinput2" type="file" name="files" multiple accept="image/*" hidden on-change="handleFiles">
+        <paper-dialog id="bigPicture"
+                      entry-animation="scale-up-animation"
+                      exit-animation="fade-out-animation">
+            <div style="position:relative">
+                <img id="bigPictureImage" style="max-width:100%" />
+            </div>
+        </paper-dialog>
+    </template>
+    <script>
+        function getIndexByRoute(route) {
+            switch(route)
+            {
+                case '/chefs':
+                    return 1;
+                case '/diners':
+                    return 0;
+                default:
+                    return undefined;
+            }
+        }
+        Polymer({
+            is: "photo-gallery",
+            properties: {
+                business: {
+                    type: Object,
+                    notify: true,
+                    reflectToAttribute: true,
+                    observer: 'onBusinessChange'
+                },
+                sections: {
+                    type: Array,
+                    notify: true,
+                    observer: 'onSectionsChange'
+                },
+                previews: {
+                    type: Array,
+                    notify: true,
+                    value: function () { return [] }
+                },
+                files: {
+                    type: Array,
+                    notify: true,
+                    value: function () { return [] }
+                },
+                client: {
+                    type: Boolean,
+                    notify: true,
+                    value: function () { return false; },
+                    observer: 'onClientToggle'
+                },
+                selectedPhoto: {
+                    type: Object,
+                    notify: true,
+                    reflectToAttribute: true,
+                }
+            },
+            ready: function () {
+            },
+            attached: function () {
+                $('html').click(function (event) { // this is so that menus are closed automatically on click elsewhere
+                    this.onClickEvent(event);
+                }.bind(this));
+
+            },
+            onBusinessChange: function () {
+                if(this.business.placeid)
+                this.sections = this.getSections(this.business);
+            },
+            onSectionsChange: function () {
+                //if (this.sections && this.sections.length)
+            },
+            onClientToggle: function () {
+                this.style.marginLeft = '50px';
+            },
+            getSections: function (business) {
+                var sections = [
+                    {
+                        name: 'User photos',
+                        photos: business.media.client.photoLinks || [],
+                        upload: this.client
+                    },
+                    {
+                        name: 'My photos',
+                        photos: business.media.pos.photoLinks || [],
+                        upload: !this.client
+                    },
+                    {
+                        name: 'Photos from across the web',
+                        photos: (business.googlePhotos || []).concat(business.webPhotos || [])
+                    },
+                    {
+                        name: 'Pdfs from across the web',
+                        photos: business.webPdfs || []
+                    },
+                ];
+
+                sections.forEach(function (s) {
+                    s.photos.forEach(defineMissingPhotoProperties);
+                    s.open = !!s.photos.length || s.upload;
+                });
+
+                return sections;
+            },
+            onToggle: function (event) {
+                var index = _.findIndex(this.sections, function (s) {
+                    return s.name == event.model.section.name;
+                });
+                this.set('sections.' + index + '.open', !event.model.section.open);
+            },
+            getPhotoHeight: function (photo) {
+                return (300 + ~~(Math.random() * 200));
+            },
+            isImageValid: function (type, removed) {
+                return type != 'PDF' && !removed;
+            },
+            getSectionIcon: function (open) {
+                return open ? "arrow-drop-up" : "arrow-drop-down-circle";
+            },
+            getRandomColor: function (tagtext) {
+                var letters = '0123456789ABCDEF'.split('');
+                var color = '#';
+                for (var i = 0; i < 6; i++) {
+                    color += letters[Math.floor(Math.random() * 16)];
+                }
+                var fgColor = parseInt(color, 16) > Math.pow(16, 3) / 2 ? 'black' : 'white';
+                var width = (60 + 5 * tagtext.length);
+                return 'background-color: ' + color + '; color: ' + fgColor + '; width: ' + width + 'px; max-width: ' + width + 'px;';
+            },
+            onDeleteTag: function (event) {
+
+            },
+            onRightClick: function (event) {
+                var photo = event.model.photo;
+                if (!this.canEdit(photo))
+                    return;
+
+                event.preventDefault();
+
+                defineMissingPhotoProperties(photo); // define missing visible property
+
+                this.selectedPhoto = photo;
+                this.$.contextMenu.style.top = event.clientY + 'px';
+                this.$.contextMenu.style.left = event.clientX + 'px';
+                this.$.contextMenu.style.visibility = 'visible';
+            },
+            onClickEvent: function (event) {
+                if (_.findIndex(event.originalEvent.path, function (elem) {
+                    return _.includes(elem.className, 'leaveContextMenuOpen');
+                }) > -1) return;
+                if (!this.$.bigPicture.opened)
+                    this.$.bigPicture.close();
+                this.$.contextMenu.style.visibility = 'hidden';
+            },
+            onPictureClick: function (event) {
+                event.preventDefault();
+                event.stopPropagation();
+                this.$.bigPictureImage.src = event.model.photo.image;
+                if (!this.$.bigPicture.opened)
+                    this.$.bigPicture.open();
+            },
+            onChangeVisibility: function (event) {
+                var sectionIndex, photoIndex;
+                var photo = this.$.contextMenu.dataPhoto;
+                sectionIndex = _.findIndex(this.sections, function (s) {
+                    photoIndex = _.findIndex(s.photos, function (p) {
+                        return p === photo;
+                    });
+                    return photoIndex > -1;
+                });
+                if (sectionIndex < 0) return;
+
+                this.set('sections.' + sectionIndex + '.photos.' + photoIndex + '.visible', !photo.visible);
+            },
+            getPhotoStyle: function (visible) {
+                return 'opacity: ' + (visible ? 1 : 0.3);
+            },
+            getPhotoVisibilityIcon: function (photo) {
+                return photo.visible ? 'visibility-off' : 'visibility';
+            },
+            getPhotoVisibilityText: function (photo) {
+                return photo.visible ? 'Hide' : 'Show';
+            },
+            onAddPhotosClick: function (event) {
+                if (this.$.uglyinput2) {
+                    this.$.uglyinput2.click();
+                }
+            },
+            onUploadPhotosClick: function (event) {
+                if (!CommonModule.utils.validateFiles(this.files)) return false;
+
+                this.disableControls(true);
+
+                var form = this.$.addMenuForm;
+                var formData = new FormData(form);
+
+                _.forEach(this.files, function (file) {
+                    formData.append('files', file, file.name);
+                });
+                formData.append('placeid', this.business.placeid);
+                var xhr = new XMLHttpRequest();
+                xhr.withCredentials = true;
+                var base = this.client ? '/diners' : '/chefs';
+                xhr.open('POST', base + '/access/add/photos', true);
+                xhr.onload = function () {
+                    this.disableControls(false);
+
+                    if (xhr.status === 200) {
+                        // File(s) uploaded.
+                        window.writeToScreen('Files uploaded successfully');
+                        var responsePhotos = JSON.parse(xhr.response);
+                        _.forEach(responsePhotos, defineMissingPhotoProperties);
+                        var photos = responsePhotos;
+                        var index = getIndexByRoute(photos[0].route);
+                        this.splice.apply(this, ['sections.' + index + '.photos', this.sections[index].photos.length, 0].concat(photos))
+                        this.clearAll();
+                    }
+                    else if (xhr.status === 401) {
+                        // File(s) uploaded.
+                        window.writeToScreen('You must be registered to upload files.', 'Login here', '/account');
+                    } else {
+                        window.writeToScreen('Service is currently unavailable. Please try again later.');
+                    }
+                }.bind(this);
+                xhr.send(formData);
+                return true;
+            },
+            handleFiles: function (event) {
+                var files = _.filter(event.target.files, function (file) {
+                    return file.type.startsWith('image/') && !_.find(this.files, function (f) {
+                        return f.name == file.name;
+                    });
+                }.bind(this));
+
+                _.forEach(files, function (file) {
+                    file.id = 'id' + Math.random().toString(36).substr(5);
+                    var reader = new FileReader();
+
+                    reader.onload = function (e) {
+                        this.push('previews', { image: e.target.result, browserId: Math.random(), file: file });
+                    }.bind(this);
+
+                    reader.readAsDataURL(file);
+                }.bind(this));
+                if (files.length)
+                    this.splice.apply(this, ['files', this.files.length, 0].concat(files));
+            },
+            removeFile: function (event) {
+                this.$.uglyinput2.value = ""; //deletes everything but we don't need it anyway
+                var fileIndex = _.findIndex(this.files, function (file) { return file === this.previews[event.model.index].file }.bind(this));
+                this.splice('previews', event.model.index, 1);
+                this.splice('files', fileIndex, 1);
+                this.updateFileBadgePosition();
+            },
+            clearAll: function () {
+                this.$.uglyinput2.value = "";
+                this.splice('previews', 0);
+                this.splice('files', 0);
+            },
+            canUpload: function (section) {
+                return section && section.upload;
+            },
+            canDelete: function(photo){
+                return this.canEdit(photo, true) || (!this.client && photo.placeid == this.business.placeid);
+            },
+            updateFileBadgePosition: function () {
+                setTimeout(function () {
+                    console.log('in updateFileBadgePosition');
+                    var elems = this.querySelectorAll('.badge');
+                    _.forEach(elems, function (elem) {
+                        if (elem.updatePosition)
+                            elem.updatePosition();
+                    });
+                }.bind(this), 50);
+            },
+            disableControls: function (disable) {
+                _.forEach(this.querySelectorAll('paper-fab'), function (node) {
+                    node.disabled = disable;
+                });
+            },
+            canEdit: function (photo, ignoreClient) { //ignoreClient basically nullifies the !this.client condition
+                return (!this.client && !ignoreClient) ||
+                    (photo.username && CommonModule.modules.user.current.is() && photo.username == CommonModule.modules.user.current.profile().username);
+            },
+            onDeletePhoto: function () {
+                $.ajax({
+                    type: "POST",
+                    url: '/diners/access/delete/photo',
+                    data: {photo: JSON.stringify(this.selectedPhoto)},
+                    success: function (a) {
+                        console.log('success');
+                        this.set('selectedPhoto.removed', true);
+                    }.bind(this)
+                });
+            }
+        });
+
+        function defineMissingPhotoProperties(photo) {
+            if (_.isUndefined(photo.visible))
+                photo.visible = true;
+            if (_.isUndefined(photo.removed))
+                photo.removed = false;
+        }
+    </script>
+</dom-module>

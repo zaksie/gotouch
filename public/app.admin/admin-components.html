@@ -1,0 +1,4771 @@
+<html><head><meta charset="UTF-8"><script>!function(e){if("object"==typeof exports&&"undefined"!=typeof module)module.exports=e();else if("function"==typeof define&&define.amd)define([],e);else{var f;"undefined"!=typeof window?f=window:"undefined"!=typeof global?f=global:"undefined"!=typeof self&&(f=self),f.page=e()}}(function(){var define,module,exports;return (function e(t,n,r){function s(o,u){if(!n[o]){if(!t[o]){var a=typeof require=="function"&&require;if(!u&&a)return a(o,!0);if(i)return i(o,!0);var f=new Error("Cannot find module '"+o+"'");throw f.code="MODULE_NOT_FOUND",f}var l=n[o]={exports:{}};t[o][0].call(l.exports,function(e){var n=t[o][1][e];return s(n?n:e)},l,l.exports,e,t,n,r)}return n[o].exports}var i=typeof require=="function"&&require;for(var o=0;o<r.length;o++)s(r[o]);return s})({1:[function(require,module,exports){
+(function (process){
+  /* globals require, module */
+
+  'use strict';
+
+  /**
+   * Module dependencies.
+   */
+
+  var pathtoRegexp = require('path-to-regexp');
+
+  /**
+   * Module exports.
+   */
+
+  module.exports = page;
+
+  /**
+   * Detect click event
+   */
+  var clickEvent = ('undefined' !== typeof document) && document.ontouchstart ? 'touchstart' : 'click';
+
+  /**
+   * To work properly with the URL
+   * history.location generated polyfill in https://github.com/devote/HTML5-History-API
+   */
+
+  var location = ('undefined' !== typeof window) && (window.history.location || window.location);
+
+  /**
+   * Perform initial dispatch.
+   */
+
+  var dispatch = true;
+
+
+  /**
+   * Decode URL components (query string, pathname, hash).
+   * Accommodates both regular percent encoding and x-www-form-urlencoded format.
+   */
+  var decodeURLComponents = true;
+
+  /**
+   * Base path.
+   */
+
+  var base = '';
+
+  /**
+   * Running flag.
+   */
+
+  var running;
+
+  /**
+   * HashBang option
+   */
+
+  var hashbang = false;
+
+  /**
+   * Previous context, for capturing
+   * page exit events.
+   */
+
+  var prevContext;
+
+  /**
+   * Register `path` with callback `fn()`,
+   * or route `path`, or redirection,
+   * or `page.start()`.
+   *
+   *   page(fn);
+   *   page('*', fn);
+   *   page('/user/:id', load, user);
+   *   page('/user/' + user.id, { some: 'thing' });
+   *   page('/user/' + user.id);
+   *   page('/from', '/to')
+   *   page();
+   *
+   * @param {String|Function} path
+   * @param {Function} fn...
+   * @api public
+   */
+
+  function page(path, fn) {
+    // <callback>
+    if ('function' === typeof path) {
+      return page('*', path);
+    }
+
+    // route <path> to <callback ...>
+    if ('function' === typeof fn) {
+      var route = new Route(path);
+      for (var i = 1; i < arguments.length; ++i) {
+        page.callbacks.push(route.middleware(arguments[i]));
+      }
+      // show <path> with [state]
+    } else if ('string' === typeof path) {
+      page['string' === typeof fn ? 'redirect' : 'show'](path, fn);
+      // start [options]
+    } else {
+      page.start(path);
+    }
+  }
+
+  /**
+   * Callback functions.
+   */
+
+  page.callbacks = [];
+  page.exits = [];
+
+  /**
+   * Current path being processed
+   * @type {String}
+   */
+  page.current = '';
+
+  /**
+   * Number of pages navigated to.
+   * @type {number}
+   *
+   *     page.len == 0;
+   *     page('/login');
+   *     page.len == 1;
+   */
+
+  page.len = 0;
+
+  /**
+   * Get or set basepath to `path`.
+   *
+   * @param {String} path
+   * @api public
+   */
+
+  page.base = function(path) {
+    if (0 === arguments.length) return base;
+    base = path;
+  };
+
+  /**
+   * Bind with the given `options`.
+   *
+   * Options:
+   *
+   *    - `click` bind to click events [true]
+   *    - `popstate` bind to popstate [true]
+   *    - `dispatch` perform initial dispatch [true]
+   *
+   * @param {Object} options
+   * @api public
+   */
+
+  page.start = function(options) {
+    options = options || {};
+    if (running) return;
+    running = true;
+    if (false === options.dispatch) dispatch = false;
+    if (false === options.decodeURLComponents) decodeURLComponents = false;
+    if (false !== options.popstate) window.addEventListener('popstate', onpopstate, false);
+    if (false !== options.click) {
+      document.addEventListener(clickEvent, onclick, false);
+    }
+    if (true === options.hashbang) hashbang = true;
+    if (!dispatch) return;
+    var url = (hashbang && ~location.hash.indexOf('#!')) ? location.hash.substr(2) + location.search : location.pathname + location.search + location.hash;
+    page.replace(url, null, true, dispatch);
+  };
+
+  /**
+   * Unbind click and popstate event handlers.
+   *
+   * @api public
+   */
+
+  page.stop = function() {
+    if (!running) return;
+    page.current = '';
+    page.len = 0;
+    running = false;
+    document.removeEventListener(clickEvent, onclick, false);
+    window.removeEventListener('popstate', onpopstate, false);
+  };
+
+  /**
+   * Show `path` with optional `state` object.
+   *
+   * @param {String} path
+   * @param {Object} state
+   * @param {Boolean} dispatch
+   * @return {Context}
+   * @api public
+   */
+
+  page.show = function(path, state, dispatch, push) {
+    var ctx = new Context(path, state);
+    page.current = ctx.path;
+    if (false !== dispatch) page.dispatch(ctx);
+    if (false !== ctx.handled && false !== push) ctx.pushState();
+    return ctx;
+  };
+
+  /**
+   * Goes back in the history
+   * Back should always let the current route push state and then go back.
+   *
+   * @param {String} path - fallback path to go back if no more history exists, if undefined defaults to page.base
+   * @param {Object} [state]
+   * @api public
+   */
+
+  page.back = function(path, state) {
+    if (page.len > 0) {
+      // this may need more testing to see if all browsers
+      // wait for the next tick to go back in history
+      history.back();
+      page.len--;
+    } else if (path) {
+      setTimeout(function() {
+        page.show(path, state);
+      });
+    }else{
+      setTimeout(function() {
+        page.show(base, state);
+      });
+    }
+  };
+
+
+  /**
+   * Register route to redirect from one path to other
+   * or just redirect to another route
+   *
+   * @param {String} from - if param 'to' is undefined redirects to 'from'
+   * @param {String} [to]
+   * @api public
+   */
+  page.redirect = function(from, to) {
+    // Define route from a path to another
+    if ('string' === typeof from && 'string' === typeof to) {
+      page(from, function(e) {
+        setTimeout(function() {
+          page.replace(to);
+        }, 0);
+      });
+    }
+
+    // Wait for the push state and replace it with another
+    if ('string' === typeof from && 'undefined' === typeof to) {
+      setTimeout(function() {
+        page.replace(from);
+      }, 0);
+    }
+  };
+
+  /**
+   * Replace `path` with optional `state` object.
+   *
+   * @param {String} path
+   * @param {Object} state
+   * @return {Context}
+   * @api public
+   */
+
+
+  page.replace = function(path, state, init, dispatch) {
+    var ctx = new Context(path, state);
+    page.current = ctx.path;
+    ctx.init = init;
+    ctx.save(); // save before dispatching, which may redirect
+    if (false !== dispatch) page.dispatch(ctx);
+    return ctx;
+  };
+
+  /**
+   * Dispatch the given `ctx`.
+   *
+   * @param {Object} ctx
+   * @api private
+   */
+
+  page.dispatch = function(ctx) {
+    var prev = prevContext,
+      i = 0,
+      j = 0;
+
+    prevContext = ctx;
+
+    function nextExit() {
+      var fn = page.exits[j++];
+      if (!fn) return nextEnter();
+      fn(prev, nextExit);
+    }
+
+    function nextEnter() {
+      var fn = page.callbacks[i++];
+
+      if (ctx.path !== page.current) {
+        ctx.handled = false;
+        return;
+      }
+      if (!fn) return unhandled(ctx);
+      fn(ctx, nextEnter);
+    }
+
+    if (prev) {
+      nextExit();
+    } else {
+      nextEnter();
+    }
+  };
+
+  /**
+   * Unhandled `ctx`. When it's not the initial
+   * popstate then redirect. If you wish to handle
+   * 404s on your own use `page('*', callback)`.
+   *
+   * @param {Context} ctx
+   * @api private
+   */
+
+  function unhandled(ctx) {
+    if (ctx.handled) return;
+    var current;
+
+    if (hashbang) {
+      current = base + location.hash.replace('#!', '');
+    } else {
+      current = location.pathname + location.search;
+    }
+
+    if (current === ctx.canonicalPath) return;
+    page.stop();
+    ctx.handled = false;
+    location.href = ctx.canonicalPath;
+  }
+
+  /**
+   * Register an exit route on `path` with
+   * callback `fn()`, which will be called
+   * on the previous context when a new
+   * page is visited.
+   */
+  page.exit = function(path, fn) {
+    if (typeof path === 'function') {
+      return page.exit('*', path);
+    }
+
+    var route = new Route(path);
+    for (var i = 1; i < arguments.length; ++i) {
+      page.exits.push(route.middleware(arguments[i]));
+    }
+  };
+
+  /**
+   * Remove URL encoding from the given `str`.
+   * Accommodates whitespace in both x-www-form-urlencoded
+   * and regular percent-encoded form.
+   *
+   * @param {str} URL component to decode
+   */
+  function decodeURLEncodedURIComponent(val) {
+    if (typeof val !== 'string') { return val; }
+    return decodeURLComponents ? decodeURIComponent(val.replace(/\+/g, ' ')) : val;
+  }
+
+  /**
+   * Initialize a new "request" `Context`
+   * with the given `path` and optional initial `state`.
+   *
+   * @param {String} path
+   * @param {Object} state
+   * @api public
+   */
+
+  function Context(path, state) {
+    if ('/' === path[0] && 0 !== path.indexOf(base)) path = base + (hashbang ? '#!' : '') + path;
+    var i = path.indexOf('?');
+
+    this.canonicalPath = path;
+    this.path = path.replace(base, '') || '/';
+    if (hashbang) this.path = this.path.replace('#!', '') || '/';
+
+    this.title = document.title;
+    this.state = state || {};
+    this.state.path = path;
+    this.querystring = ~i ? decodeURLEncodedURIComponent(path.slice(i + 1)) : '';
+    this.pathname = decodeURLEncodedURIComponent(~i ? path.slice(0, i) : path);
+    this.params = {};
+
+    // fragment
+    this.hash = '';
+    if (!hashbang) {
+      if (!~this.path.indexOf('#')) return;
+      var parts = this.path.split('#');
+      this.path = parts[0];
+      this.hash = decodeURLEncodedURIComponent(parts[1]) || '';
+      this.querystring = this.querystring.split('#')[0];
+    }
+  }
+
+  /**
+   * Expose `Context`.
+   */
+
+  page.Context = Context;
+
+  /**
+   * Push state.
+   *
+   * @api private
+   */
+
+  Context.prototype.pushState = function() {
+    page.len++;
+    history.pushState(this.state, this.title, hashbang && this.path !== '/' ? '#!' + this.path : this.canonicalPath);
+  };
+
+  /**
+   * Save the context state.
+   *
+   * @api public
+   */
+
+  Context.prototype.save = function() {
+    history.replaceState(this.state, this.title, hashbang && this.path !== '/' ? '#!' + this.path : this.canonicalPath);
+  };
+
+  /**
+   * Initialize `Route` with the given HTTP `path`,
+   * and an array of `callbacks` and `options`.
+   *
+   * Options:
+   *
+   *   - `sensitive`    enable case-sensitive routes
+   *   - `strict`       enable strict matching for trailing slashes
+   *
+   * @param {String} path
+   * @param {Object} options.
+   * @api private
+   */
+
+  function Route(path, options) {
+    options = options || {};
+    this.path = (path === '*') ? '(.*)' : path;
+    this.method = 'GET';
+    this.regexp = pathtoRegexp(this.path,
+      this.keys = [],
+      options.sensitive,
+      options.strict);
+  }
+
+  /**
+   * Expose `Route`.
+   */
+
+  page.Route = Route;
+
+  /**
+   * Return route middleware with
+   * the given callback `fn()`.
+   *
+   * @param {Function} fn
+   * @return {Function}
+   * @api public
+   */
+
+  Route.prototype.middleware = function(fn) {
+    var self = this;
+    return function(ctx, next) {
+      if (self.match(ctx.path, ctx.params)) return fn(ctx, next);
+      next();
+    };
+  };
+
+  /**
+   * Check if this route matches `path`, if so
+   * populate `params`.
+   *
+   * @param {String} path
+   * @param {Object} params
+   * @return {Boolean}
+   * @api private
+   */
+
+  Route.prototype.match = function(path, params) {
+    var keys = this.keys,
+      qsIndex = path.indexOf('?'),
+      pathname = ~qsIndex ? path.slice(0, qsIndex) : path,
+      m = this.regexp.exec(decodeURIComponent(pathname));
+
+    if (!m) return false;
+
+    for (var i = 1, len = m.length; i < len; ++i) {
+      var key = keys[i - 1];
+      var val = decodeURLEncodedURIComponent(m[i]);
+      if (val !== undefined || !(hasOwnProperty.call(params, key.name))) {
+        params[key.name] = val;
+      }
+    }
+
+    return true;
+  };
+
+
+  /**
+   * Handle "populate" events.
+   */
+
+  var onpopstate = (function () {
+    var loaded = false;
+    if ('undefined' === typeof window) {
+      return;
+    }
+    if (document.readyState === 'complete') {
+      loaded = true;
+    } else {
+      window.addEventListener('load', function() {
+        setTimeout(function() {
+          loaded = true;
+        }, 0);
+      });
+    }
+    return function onpopstate(e) {
+      if (!loaded) return;
+      if (e.state) {
+        var path = e.state.path;
+        page.replace(path, e.state);
+      } else {
+        page.show(location.pathname + location.hash, undefined, undefined, false);
+      }
+    };
+  })();
+  /**
+   * Handle "click" events.
+   */
+
+  function onclick(e) {
+
+    if (1 !== which(e)) return;
+
+    if (e.metaKey || e.ctrlKey || e.shiftKey) return;
+    if (e.defaultPrevented) return;
+
+
+
+    // ensure link
+    var el = e.target;
+    while (el && 'A' !== el.nodeName) el = el.parentNode;
+    if (!el || 'A' !== el.nodeName) return;
+
+
+
+    // Ignore if tag has
+    // 1. "download" attribute
+    // 2. rel="external" attribute
+    if (el.hasAttribute('download') || el.getAttribute('rel') === 'external') return;
+
+    // ensure non-hash for the same path
+    var link = el.getAttribute('href');
+    if (!hashbang && el.pathname === location.pathname && (el.hash || '#' === link)) return;
+
+
+
+    // Check for mailto: in the href
+    if (link && link.indexOf('mailto:') > -1) return;
+
+    // check target
+    if (el.target) return;
+
+    // x-origin
+    if (!sameOrigin(el.href)) return;
+
+
+
+    // rebuild path
+    var path = el.pathname + el.search + (el.hash || '');
+
+    // strip leading "/[drive letter]:" on NW.js on Windows
+    if (typeof process !== 'undefined' && path.match(/^\/[a-zA-Z]:\//)) {
+      path = path.replace(/^\/[a-zA-Z]:\//, '/');
+    }
+
+    // same page
+    var orig = path;
+
+    if (path.indexOf(base) === 0) {
+      path = path.substr(base.length);
+    }
+
+    if (hashbang) path = path.replace('#!', '');
+
+    if (base && orig === path) return;
+
+    e.preventDefault();
+    page.show(orig);
+  }
+
+  /**
+   * Event button.
+   */
+
+  function which(e) {
+    e = e || window.event;
+    return null === e.which ? e.button : e.which;
+  }
+
+  /**
+   * Check if `href` is the same origin.
+   */
+
+  function sameOrigin(href) {
+    var origin = location.protocol + '//' + location.hostname;
+    if (location.port) origin += ':' + location.port;
+    return (href && (0 === href.indexOf(origin)));
+  }
+
+  page.sameOrigin = sameOrigin;
+
+}).call(this,require('_process'))
+},{"_process":2,"path-to-regexp":3}],2:[function(require,module,exports){
+// shim for using process in browser
+
+var process = module.exports = {};
+
+process.nextTick = (function () {
+    var canSetImmediate = typeof window !== 'undefined'
+    && window.setImmediate;
+    var canMutationObserver = typeof window !== 'undefined'
+    && window.MutationObserver;
+    var canPost = typeof window !== 'undefined'
+    && window.postMessage && window.addEventListener
+    ;
+
+    if (canSetImmediate) {
+        return function (f) { return window.setImmediate(f) };
+    }
+
+    var queue = [];
+
+    if (canMutationObserver) {
+        var hiddenDiv = document.createElement("div");
+        var observer = new MutationObserver(function () {
+            var queueList = queue.slice();
+            queue.length = 0;
+            queueList.forEach(function (fn) {
+                fn();
+            });
+        });
+
+        observer.observe(hiddenDiv, { attributes: true });
+
+        return function nextTick(fn) {
+            if (!queue.length) {
+                hiddenDiv.setAttribute('yes', 'no');
+            }
+            queue.push(fn);
+        };
+    }
+
+    if (canPost) {
+        window.addEventListener('message', function (ev) {
+            var source = ev.source;
+            if ((source === window || source === null) && ev.data === 'process-tick') {
+                ev.stopPropagation();
+                if (queue.length > 0) {
+                    var fn = queue.shift();
+                    fn();
+                }
+            }
+        }, true);
+
+        return function nextTick(fn) {
+            queue.push(fn);
+            window.postMessage('process-tick', '*');
+        };
+    }
+
+    return function nextTick(fn) {
+        setTimeout(fn, 0);
+    };
+})();
+
+process.title = 'browser';
+process.browser = true;
+process.env = {};
+process.argv = [];
+
+function noop() {}
+
+process.on = noop;
+process.addListener = noop;
+process.once = noop;
+process.off = noop;
+process.removeListener = noop;
+process.removeAllListeners = noop;
+process.emit = noop;
+
+process.binding = function (name) {
+    throw new Error('process.binding is not supported');
+};
+
+// TODO(shtylman)
+process.cwd = function () { return '/' };
+process.chdir = function (dir) {
+    throw new Error('process.chdir is not supported');
+};
+
+},{}],3:[function(require,module,exports){
+var isarray = require('isarray')
+
+/**
+ * Expose `pathToRegexp`.
+ */
+module.exports = pathToRegexp
+module.exports.parse = parse
+module.exports.compile = compile
+module.exports.tokensToFunction = tokensToFunction
+module.exports.tokensToRegExp = tokensToRegExp
+
+/**
+ * The main path matching regexp utility.
+ *
+ * @type {RegExp}
+ */
+var PATH_REGEXP = new RegExp([
+  // Match escaped characters that would otherwise appear in future matches.
+  // This allows the user to escape special characters that won't transform.
+  '(\\\\.)',
+  // Match Express-style parameters and un-named parameters with a prefix
+  // and optional suffixes. Matches appear as:
+  //
+  // "/:test(\\d+)?" => ["/", "test", "\d+", undefined, "?", undefined]
+  // "/route(\\d+)"  => [undefined, undefined, undefined, "\d+", undefined, undefined]
+  // "/*"            => ["/", undefined, undefined, undefined, undefined, "*"]
+  '([\\/.])?(?:(?:\\:(\\w+)(?:\\(((?:\\\\.|[^()])+)\\))?|\\(((?:\\\\.|[^()])+)\\))([+*?])?|(\\*))'
+].join('|'), 'g')
+
+/**
+ * Parse a string for the raw tokens.
+ *
+ * @param  {String} str
+ * @return {Array}
+ */
+function parse (str) {
+  var tokens = []
+  var key = 0
+  var index = 0
+  var path = ''
+  var res
+
+  while ((res = PATH_REGEXP.exec(str)) != null) {
+    var m = res[0]
+    var escaped = res[1]
+    var offset = res.index
+    path += str.slice(index, offset)
+    index = offset + m.length
+
+    // Ignore already escaped sequences.
+    if (escaped) {
+      path += escaped[1]
+      continue
+    }
+
+    // Push the current path onto the tokens.
+    if (path) {
+      tokens.push(path)
+      path = ''
+    }
+
+    var prefix = res[2]
+    var name = res[3]
+    var capture = res[4]
+    var group = res[5]
+    var suffix = res[6]
+    var asterisk = res[7]
+
+    var repeat = suffix === '+' || suffix === '*'
+    var optional = suffix === '?' || suffix === '*'
+    var delimiter = prefix || '/'
+    var pattern = capture || group || (asterisk ? '.*' : '[^' + delimiter + ']+?')
+
+    tokens.push({
+      name: name || key++,
+      prefix: prefix || '',
+      delimiter: delimiter,
+      optional: optional,
+      repeat: repeat,
+      pattern: escapeGroup(pattern)
+    })
+  }
+
+  // Match any characters still remaining.
+  if (index < str.length) {
+    path += str.substr(index)
+  }
+
+  // If the path exists, push it onto the end.
+  if (path) {
+    tokens.push(path)
+  }
+
+  return tokens
+}
+
+/**
+ * Compile a string to a template function for the path.
+ *
+ * @param  {String}   str
+ * @return {Function}
+ */
+function compile (str) {
+  return tokensToFunction(parse(str))
+}
+
+/**
+ * Expose a method for transforming tokens into the path function.
+ */
+function tokensToFunction (tokens) {
+  // Compile all the tokens into regexps.
+  var matches = new Array(tokens.length)
+
+  // Compile all the patterns before compilation.
+  for (var i = 0; i < tokens.length; i++) {
+    if (typeof tokens[i] === 'object') {
+      matches[i] = new RegExp('^' + tokens[i].pattern + '$')
+    }
+  }
+
+  return function (obj) {
+    var path = ''
+    var data = obj || {}
+
+    for (var i = 0; i < tokens.length; i++) {
+      var token = tokens[i]
+
+      if (typeof token === 'string') {
+        path += token
+
+        continue
+      }
+
+      var value = data[token.name]
+      var segment
+
+      if (value == null) {
+        if (token.optional) {
+          continue
+        } else {
+          throw new TypeError('Expected "' + token.name + '" to be defined')
+        }
+      }
+
+      if (isarray(value)) {
+        if (!token.repeat) {
+          throw new TypeError('Expected "' + token.name + '" to not repeat, but received "' + value + '"')
+        }
+
+        if (value.length === 0) {
+          if (token.optional) {
+            continue
+          } else {
+            throw new TypeError('Expected "' + token.name + '" to not be empty')
+          }
+        }
+
+        for (var j = 0; j < value.length; j++) {
+          segment = encodeURIComponent(value[j])
+
+          if (!matches[i].test(segment)) {
+            throw new TypeError('Expected all "' + token.name + '" to match "' + token.pattern + '", but received "' + segment + '"')
+          }
+
+          path += (j === 0 ? token.prefix : token.delimiter) + segment
+        }
+
+        continue
+      }
+
+      segment = encodeURIComponent(value)
+
+      if (!matches[i].test(segment)) {
+        throw new TypeError('Expected "' + token.name + '" to match "' + token.pattern + '", but received "' + segment + '"')
+      }
+
+      path += token.prefix + segment
+    }
+
+    return path
+  }
+}
+
+/**
+ * Escape a regular expression string.
+ *
+ * @param  {String} str
+ * @return {String}
+ */
+function escapeString (str) {
+  return str.replace(/([.+*?=^!:${}()[\]|\/])/g, '\\$1')
+}
+
+/**
+ * Escape the capturing group by escaping special characters and meaning.
+ *
+ * @param  {String} group
+ * @return {String}
+ */
+function escapeGroup (group) {
+  return group.replace(/([=!:$\/()])/g, '\\$1')
+}
+
+/**
+ * Attach the keys as a property of the regexp.
+ *
+ * @param  {RegExp} re
+ * @param  {Array}  keys
+ * @return {RegExp}
+ */
+function attachKeys (re, keys) {
+  re.keys = keys
+  return re
+}
+
+/**
+ * Get the flags for a regexp from the options.
+ *
+ * @param  {Object} options
+ * @return {String}
+ */
+function flags (options) {
+  return options.sensitive ? '' : 'i'
+}
+
+/**
+ * Pull out keys from a regexp.
+ *
+ * @param  {RegExp} path
+ * @param  {Array}  keys
+ * @return {RegExp}
+ */
+function regexpToRegexp (path, keys) {
+  // Use a negative lookahead to match only capturing groups.
+  var groups = path.source.match(/\((?!\?)/g)
+
+  if (groups) {
+    for (var i = 0; i < groups.length; i++) {
+      keys.push({
+        name: i,
+        prefix: null,
+        delimiter: null,
+        optional: false,
+        repeat: false,
+        pattern: null
+      })
+    }
+  }
+
+  return attachKeys(path, keys)
+}
+
+/**
+ * Transform an array into a regexp.
+ *
+ * @param  {Array}  path
+ * @param  {Array}  keys
+ * @param  {Object} options
+ * @return {RegExp}
+ */
+function arrayToRegexp (path, keys, options) {
+  var parts = []
+
+  for (var i = 0; i < path.length; i++) {
+    parts.push(pathToRegexp(path[i], keys, options).source)
+  }
+
+  var regexp = new RegExp('(?:' + parts.join('|') + ')', flags(options))
+
+  return attachKeys(regexp, keys)
+}
+
+/**
+ * Create a path regexp from string input.
+ *
+ * @param  {String} path
+ * @param  {Array}  keys
+ * @param  {Object} options
+ * @return {RegExp}
+ */
+function stringToRegexp (path, keys, options) {
+  var tokens = parse(path)
+  var re = tokensToRegExp(tokens, options)
+
+  // Attach keys back to the regexp.
+  for (var i = 0; i < tokens.length; i++) {
+    if (typeof tokens[i] !== 'string') {
+      keys.push(tokens[i])
+    }
+  }
+
+  return attachKeys(re, keys)
+}
+
+/**
+ * Expose a function for taking tokens and returning a RegExp.
+ *
+ * @param  {Array}  tokens
+ * @param  {Array}  keys
+ * @param  {Object} options
+ * @return {RegExp}
+ */
+function tokensToRegExp (tokens, options) {
+  options = options || {}
+
+  var strict = options.strict
+  var end = options.end !== false
+  var route = ''
+  var lastToken = tokens[tokens.length - 1]
+  var endsWithSlash = typeof lastToken === 'string' && /\/$/.test(lastToken)
+
+  // Iterate over the tokens and create our regexp string.
+  for (var i = 0; i < tokens.length; i++) {
+    var token = tokens[i]
+
+    if (typeof token === 'string') {
+      route += escapeString(token)
+    } else {
+      var prefix = escapeString(token.prefix)
+      var capture = token.pattern
+
+      if (token.repeat) {
+        capture += '(?:' + prefix + capture + ')*'
+      }
+
+      if (token.optional) {
+        if (prefix) {
+          capture = '(?:' + prefix + '(' + capture + '))?'
+        } else {
+          capture = '(' + capture + ')?'
+        }
+      } else {
+        capture = prefix + '(' + capture + ')'
+      }
+
+      route += capture
+    }
+  }
+
+  // In non-strict mode we allow a slash at the end of match. If the path to
+  // match already ends with a slash, we remove it for consistency. The slash
+  // is valid at the end of a path match, not in the middle. This is important
+  // in non-ending mode, where "/test/" shouldn't match "/test//route".
+  if (!strict) {
+    route = (endsWithSlash ? route.slice(0, -2) : route) + '(?:\\/(?=$))?'
+  }
+
+  if (end) {
+    route += '$'
+  } else {
+    // In non-ending mode, we need the capturing groups to match as much as
+    // possible by using a positive lookahead to the end or next path segment.
+    route += strict && endsWithSlash ? '' : '(?=\\/|$)'
+  }
+
+  return new RegExp('^' + route, flags(options))
+}
+
+/**
+ * Normalize the given path string, returning a regular expression.
+ *
+ * An empty array can be passed in for the keys, which will hold the
+ * placeholder key descriptions. For example, using `/user/:id`, `keys` will
+ * contain `[{ name: 'id', delimiter: '/', optional: false, repeat: false }]`.
+ *
+ * @param  {(String|RegExp|Array)} path
+ * @param  {Array}                 [keys]
+ * @param  {Object}                [options]
+ * @return {RegExp}
+ */
+function pathToRegexp (path, keys, options) {
+  keys = keys || []
+
+  if (!isarray(keys)) {
+    options = keys
+    keys = []
+  } else if (!options) {
+    options = {}
+  }
+
+  if (path instanceof RegExp) {
+    return regexpToRegexp(path, keys, options)
+  }
+
+  if (isarray(path)) {
+    return arrayToRegexp(path, keys, options)
+  }
+
+  return stringToRegexp(path, keys, options)
+}
+
+},{"isarray":4}],4:[function(require,module,exports){
+module.exports = Array.isArray || function (arr) {
+  return Object.prototype.toString.call(arr) == '[object Array]';
+};
+
+},{}]},{},[1])(1)
+});</script>
+<script>
+    PubSub.subscribe('App.ready', function () {
+        loadPagejs();
+    });
+
+    function loadPagejs(){
+        // Middleware
+        function scrollToTop(ctx, next) {
+            if (app)
+                app.scrollPageToTop();
+            next();
+        }
+
+        // Routes
+        page('/', function () {
+            page.redirect('/pos-users');
+        });
+
+        page('/pos-users', scrollToTop, function () {
+            app.route = '/pos-users';
+            PubSub.publish('neonpages.POSUserManager');
+        });
+
+        page('/account', scrollToTop, function () {
+            app.route = '/account';
+            PubSub.publish('neonpages.Account');
+        });
+
+        // add #! before urls
+        page.base('/admins');
+        page({
+            hashbang: true,
+        });
+    }
+</script>
+<style>
+body {
+  background: #fafafa;
+  font-family: 'Roboto', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  color: #333;
+}
+
+a{
+    color:cornflowerblue;
+}
+a:link, a:visited , a:active, a:hover {
+    cursor:pointer;
+    text-decoration: none;
+    color: blue;
+}
+div.full{
+    width:100%;
+}
+.nobutton{
+    padding:0;
+    text-transform:none;
+    font-size:0.8em;
+    background:none;
+    elevation:0;
+    text-align:left;
+    display:block;
+    width:100%;
+}
+
+.nobutton paper-icon-item{
+    margin:0;
+    padding-left: 10px;
+}
+.nopadding{
+    padding:0;
+    margin:0;
+}
+paper-button {
+    display: block;
+    margin: 10px;
+    font-size:0.9em;
+    background-size: contain;
+}
+paper-toast{
+    z-index:20;
+}
+
+.separator {
+    width: 100%;
+    margin: 5px 5px;
+    height: 5px;
+    background: url("/public/images/separator.jpg") no-repeat;
+    background-size: 100%;
+}
+
+::-webkit-scrollbar {
+    width: 6px;
+}
+ 
+::-webkit-scrollbar-track {
+    -webkit-box-shadow: inset 0 0 3px rgba(0,0,0,0.3);
+    border-radius: 4px;
+}
+ 
+::-webkit-scrollbar-thumb {
+    border-radius: 4px;
+    -webkit-box-shadow: inset 0 0 3px rgba(0,0,0,0.5);
+}
+
+.caption {
+    font-family: 'Fjalla One', sans-serif;
+    font-stretch: ultra-expanded;
+    font-size: large;
+    text-align: center;
+}
+
+
+.menu-navigation {
+    position: relative;
+    top: -10px;
+    color: white;
+}
+
+@media (min-width:641px) {
+    .control-icons {
+        left: 220px;
+    }
+}
+
+
+
+paper-button.checkout-button {
+    padding: 3px;
+    display: block;
+    width: 100%;
+    font-stretch: expanded;
+    left: 0;
+    right: 0;
+    margin: auto;
+}
+
+paper-button.standard {
+    position:relative;
+    display: block;
+    width: 100%;
+    left:0;
+    right:0;
+    margin: auto;
+}
+
+
+.smaller-button {
+ /*   padding-top: 2px;
+    padding-bottom: 2px;
+    max-height: 32px;
+     */
+}
+
+.onload-opacity {
+    opacity: 0;
+    -moz-transition: opacity 0.5s linear;
+    -o-transition: opacity 0.5s linear;
+    -webkit-transition: opacity 0.5s linear;
+    transition: opacity 0.5s linear;
+}
+
+paper-spinner {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    margin: auto;
+    max-width: 32px;
+    max-height: 32px;
+    layer-1-color: var(--paper-light-blue-500);
+    layer-2-color: var(--paper-light-blue-500);
+    layer-3-color: var(--paper-light-blue-500);
+    layer-4-color: var(--paper-light-blue-500);
+}
+
+paper-slider {
+    --paper-slider-active-color: whitesmoke;
+}
+
+.divider {
+    opacity: 0.5;
+    color: #ccc;
+    width: 95%;
+    margin: 10px auto;
+    overflow: hidden;
+    text-align: center;
+    line-height: 0.8em;
+}
+
+    .divider:before, .divider:after {
+        content: "";
+        vertical-align: top;
+        display: inline-block;
+        width: 50%;
+        height: 0.45em;
+        border-bottom: 1px solid #ccc;
+        margin: 0 2% 0 -55%;
+    }
+
+    .divider:after {
+        margin: 0 -55% 0 2%;
+    }
+
+.fjalla-caption {
+    font-family: 'Fjalla One', sans-serif;
+    font-stretch: expanded;
+    font-size: x-large;
+    text-align: center;
+    opacity:0.6;
+}
+
+.circular-avatar-big {
+    width: 250px;
+    height: 250px;
+    -webkit-border-radius: 50%;
+    -moz-border-radius: 50%;
+    border-radius: 50%;
+    box-shadow: 5px 5px 2.5px #888888;
+}
+
+.circular-avatar-small, .circular-avatar-xsmall, .circular-avatar-xxsmall  {
+    min-width: 80px;
+    min-height: 80px;
+    max-width: 80px;
+    max-height: 80px;
+    -webkit-border-radius: 50%;
+    -moz-border-radius: 50%;
+    border-radius: 50%;
+    box-shadow: 3px 3px 1.5px #888888;
+}
+
+.circular-avatar-xsmall{
+    min-width: 40px;
+    min-height: 40px;
+    max-width: 40px;
+    max-height: 40px;
+}
+
+.circular-avatar-xxsmall{
+    min-width: 25px;
+    min-height: 25px;
+    max-width: 25px;
+    max-height: 25px;
+}
+
+.rectangular-avatar-medium {
+    min-width: 135px;
+    min-height: 160px;
+    max-width: 135px;
+    max-height: 160px;
+    margin:10px;
+    -webkit-border-radius: 10%;
+    -moz-border-radius: 10%;
+    border-radius: 10%;
+    box-shadow: 5px 5px 2.5px #888888;
+}
+
+#drawerToolbar{
+    z-index:2 !important;
+}
+
+
+</style>
+
+
+</head><body><div hidden="" by-vulcanize=""><dom-module id="yummlet-admin" assetpath="/">
+    <style>
+  /*
+   Polymer includes a shim for CSS Custom Properties that we can use for application theming.
+   Below, you'll find the default palette for the yummlet layout. Feel free to play
+   with changing the colors used or generate your own palette of colours at MaterialPalette.com.
+
+   See https://www.polymer-project.org/1.0/docs/devguide/styling.html#xscope-styling-details
+   for further information on custom CSS properties.
+   */
+
+  /* Application theme */
+
+  :host {
+    --dark-primary-color: #303F9F;
+    --default-primary-color: #3F51B5;
+    --light-primary-color: #FFE8D0;
+    --text-primary-color: #ffffff; /*text/icons*/
+    --accent-color: #FF4081;
+    --primary-background-color: #FAFAFA;
+    --primary-text-color: #212121;
+    --secondary-text-color: #727272;
+    --disabled-text-color: #bdbdbd;
+    --divider-color: #B6B6B6;
+
+    /* Components */
+
+    /* paper-drawer-panel */
+    --drawer-menu-color: #ffffff;
+    --drawer-border-color: 1px solid #ccc;
+    --drawer-toolbar-border-color: 1px solid rgba(0, 0, 0, 0.22);
+    --paper-drawer-panel-scrim-opacity: 0.5;
+    /* paper-menu */
+    --paper-menu-background-color: #fff;
+  }
+
+  /* General styles */
+
+  #drawerToolbar {
+    /*color: var(--secondary-text-color);
+    /*background-color: var(--drawer-menu-color);
+    /*border-bottom: var(--drawer-toolbar-border-color);*/
+  }
+
+  paper-scroll-header-panel {
+    height: 100%;
+  }
+
+  paper-material {
+    border-radius: 2px;
+    height: 100%;
+    padding: 16px 0 16px 0;
+    width: calc(98.66% - 16px);
+    margin: 16px auto;
+    background: white;
+  }
+
+  paper-menu iron-icon {
+    margin-right: 33px;
+    opacity: 0.54;
+  }
+
+  
+  .iron-selected {
+    color: #3F51B5 !important;
+  }
+
+  paper-menu a {
+    text-decoration: none;
+    color: var(--menu-link-color);
+    display: -ms-flexbox;
+    display: -webkit-flex;
+    display: flex;
+    -ms-flex-direction: row;
+    -webkit-flex-direction: row;
+    flex-direction: row;
+    -ms-flex-align: center;
+    -webkit-align-items: center;
+    align-items: center;
+    font-family: 'Roboto', 'Noto', sans-serif;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    font-size: 14px;
+    font-weight: 400;
+    line-height: 24px;
+    min-height: 48px;
+    padding: 0 16px;
+  }
+
+  #mainToolbar .bottom {
+    margin-left: 48px;
+    /* Required for main area's paper-scroll-header-panel custom condensing transformation */
+    -webkit-transform-origin: left center;
+    transform-origin: left center;
+  }
+
+  /* Height of the scroll area */
+  .content {
+      height:100%;
+      width:100%;
+  }
+
+  /* Breakpoints */
+
+  /* Small */
+  @media (max-width: 600px) {
+      paper-input.input-big-screen{
+        display:none;
+    }
+    paper-material {
+      --menu-container-display: none;
+      width: calc(97.33% - 32px);
+      padding-left: 16px;
+      padding-right: 16px;
+    }
+
+    #drawer .paper-toolbar {
+      margin-left: 16px;
+    }
+
+    #overlay {
+      min-width: 360px;
+    }
+
+    .bg {
+      background: white;
+    }
+
+  }
+
+  /*Tablet+*/ 
+  @media (min-width: 601px) {
+      paper-material {
+      width: calc(98% - 46px);
+      margin-bottom: 32px;
+      padding-left: 30px;
+      padding-right: 30px;
+    }
+/*
+    #drawer.paper-drawer-panel > [drawer] {
+      border-right: 1px solid rgba(0, 0, 0, 0.14);
+    }
+    */
+  }
+  @media (min-width:800){
+      paper-input.input-big-screen{
+        display:inline;
+    }
+  }
+
+  /* Material Design Adaptive Breakpoints */
+  /*
+    Below you'll find CSS media queries based on the breakpoint guidance
+    published by the Material Design team. You can choose to use, customise
+    or remove these breakpoints based on your needs.
+
+    http://www.google.com/design/spec/layout/adaptive-ui.html#adaptive-ui-breakpoints
+   */
+
+  /* mobile-small */
+  @media all and (min-width: 0) and (max-width: 360px) and (orientation: portrait) { }
+  /* mobile-large */
+  @media all and (min-width: 361px) and (orientation: portrait) { }
+  /* mobile-small-landscape */
+  @media all and (min-width: 0) and (max-width: 480px) and (orientation: landscape) { }
+  /* mobile-large-landscape */
+  @media all and (min-width: 481px) and (orientation: landscape) { }
+  /* tablet-small-landscape */
+  @media all and (min-width: 600px) and (max-width: 960px) and (orientation: landscape) { }
+  /* tablet-large-landscape */
+  @media all and (min-width: 961px) and (orientation: landscape) { }
+  /* tablet-small */
+  @media all and (min-width: 600px) and (orientation: portrait) { }
+  /* tablet-large */
+  @media all and (min-width: 601px) and (max-width: 840px) and (orientation : portrait) { }
+  /* desktop-x-small-landscape */
+  @media all and (min-width: 0) and (max-width: 480px) and (orientation: landscape) { }
+  /* desktop-x-small */
+  @media all and (min-width: 0) and (max-width: 480px) and (max-aspect-ratio: 4/3) { }
+  /* desktop-small-landscape */
+  @media all and (min-width: 481px) and (max-width: 840px) and (orientation: landscape) { }
+  /* desktop-small */
+  @media all and (min-width: 481px) and (max-width: 840px) and (max-aspect-ratio: 4/3) { }
+  /* desktop-medium-landscape */
+  @media all and (min-width: 841px) and (max-width: 1280px) and (orientation: landscape) { }
+  /* desktop-medium */
+  @media all and (min-width: 841px) and (max-width: 1280px) and (max-aspect-ratio: 4/3) { }
+  /* desktop-large */
+  @media all and (min-width: 1281px) and (max-width: 1600px) { }
+  /* desktop-xlarge */
+  @media all and (min-width: 1601px) and (max-width: 1920px) { }
+
+
+  /* MY STYLES */
+  paper-toolbar {
+    font-family: 'Fjalla One', sans-serif;
+    background-size: 100vw auto;
+    background-position-y: center;
+    background-position-x: -200px;
+    background-repeat: no-repeat;
+    background-color: rgb(48,23,10);
+    background-image: linear-gradient(rgba(0,0,0,0.5), rgba(0,0,0,0.5)), url("/public/images/coffee.jpg");
+    }
+
+  paper-toolbar#drawerToolbar{
+    background-position-x: 0;
+  }
+    @media (max-width: 600px) {
+        paper-toolbar {
+            background-size: calc(100vw + 200px) auto;
+        }
+    }
+  .title-bar-fonting{
+      margin-right: -10px;
+      font-size:large;
+      padding-top: 0.8em;
+      text-align:right;
+      line-height: 90%;
+  }
+
+  paper-icon-button{
+      margin-right: 5px;
+      margin-left: 5px;
+  }
+  paper-input.dark-bg {
+    --paper-input-container-focus-color: blue;
+    --paper-input-container-invalid-color: red;
+    --paper-input-container-input-color: white;
+  }
+
+  .flexchild {
+    @apply(--layout-flex);
+  }
+  .flex2child {
+    @apply(--layout-flex-2);
+  }
+  .flex3child {
+    @apply(--layout-flex-3);
+  }
+
+.yummlet-pos-text{
+    font-weight:bolder;
+    color:cornflowerblue;
+}
+
+
+</style>
+
+    <template>
+        <style>
+            .blurred {
+                -webkit-filter: blur(7px);
+                -moz-filter: blur(7px);
+                -o-filter: blur(7px);
+                -ms-filter: blur(7px);
+                filter: blur(7px);
+            }
+
+            .yummlet-admin-text {
+                color: rgb(139, 180, 95);
+            }
+
+            paper-toolbar {
+                background-image: linear-gradient(rgba(139, 180, 95,0.3), rgba(139, 180, 95,0.3)), url("/public/images/coffee.jpg");
+            }
+        </style>
+        <account-manager backdrop="#paperDrawerPanel"></account-manager>
+        <paper-drawer-panel id="paperDrawerPanel" drawer-width="200px" transition="true">
+            <paper-header-panel drawer="">
+                <paper-toolbar id="drawerToolbar" shadow="">
+                    <div class="title-bar-fonting">
+                        <span>yummlet</span> <span class="yummlet-admin-text">ADMINS</span>
+                        <div class="paper-font-subhead" style="font-size:xx-small">NO TAG LINE</div>
+                    </div>
+                </paper-toolbar>
+                <!-- Menus go here -->
+                <paper-menu class="list" attr-for-selected="data-route" selected="{{route}}">
+                    <paper-button class="nobutton" data-route="/pos-users" on-click="onRouteClick">
+                        <paper-icon-item>
+                            <iron-icon id="openOrders" icon="supervisor-account" item-icon=""></iron-icon>
+                            <span>POS users</span>
+                        <paper-icon-item>
+                    </paper-icon-item></paper-icon-item></paper-button>
+                </paper-menu>
+
+            </paper-header-panel>
+            <paper-header-panel main="" shadow="true">
+                <paper-toolbar id="mainToolbar">
+                    <paper-icon-button id="paperToggle" icon="menu" paper-drawer-toggle=""></paper-icon-button>
+                    <span class="flex"></span>
+                    <data-loader-progress id="dataLoaderProgress"></data-loader-progress>
+                    <span class="flex"></span>
+                    <paper-icon-button icon="account-circle" on-click="onRouteClick" data-route="/account" id="accountButton"></paper-icon-button>
+                    <paper-icon-button icon="refresh" on-click="onRefresh"></paper-icon-button>
+                </paper-toolbar>
+                <div class="content">
+                    <admin-view></admin-view>
+                </div>
+            </paper-header-panel>
+        </paper-drawer-panel>
+    </template>
+    <script>
+        Polymer({
+            is: "yummlet-admin",
+            properties: {
+                route: {
+                    type: String,
+                    notify: true,
+                    value: function () { return '/pos-users'; }
+                },
+            },
+            ready: function () {
+            },
+            attached: function () {
+                app = this;
+                PubSub.subscribe('app.scrollToTop', function () {
+                    this.scrollPageToTop();
+                }.bind(this));
+
+                PubSub.subscribe('User.logged', this.onSessionChange.bind(this));
+                PubSub.subscribe('User.logged.in', this.onLoginSuccess.bind(this));
+
+                this.onSessionChange();
+
+                PubSub.subscribe('Loading.progress', function (msg, percent) {
+                    this.$.dataLoaderProgress.percent = percent;
+                }.bind(this));
+
+                PubSub.subscribe('Drawer', function (msg) {
+                    if (_.includes(msg, 'close'))
+                        return $('#paperDrawerPanel').closeDrawer();
+                    $('#paperDrawerPanel').openDrawer();
+                }.bind(this));
+
+                PubSub.publish('App.ready', null);
+            },
+            onLoginSuccess: function () {
+                CommonModule.refresh();
+            },
+            onSessionChange: function () {
+                var color = CommonModule.modules.user.current.is() ? 'green' : 'white';
+                this.$.accountButton.style.color = color;
+            },
+            displayInstalledToast: function () {
+                // Check to make sure caching is actually enabled—it won't be in the dev environment.
+                if (!document.querySelector('platinum-sw-cache').disabled) {
+                    document.querySelector('#caching-complete').show();
+                }
+            },
+            onRefresh: function () {
+                CommonModule.refresh();
+            },
+            // Close drawer after menu item is selected if drawerPanel is narrow
+            onDataRouteClick: function (event) {
+                var drawerPanel = document.querySelector('#paperDrawerPanel');
+                if (drawerPanel.narrow) {
+                    drawerPanel.closeDrawer();
+                }
+            },
+
+            // Scroll page to top and expand header
+            scrollPageToTop: function () {
+                var headerPanel = document.querySelector('paper-header-panel[main]');
+                if (headerPanel) {
+                    headerPanel.$.mainContainer.scrollTop = 0;
+                }
+            },
+            onRouteClick: function (event) {
+                if (event.target.id == 'checkboxContainer') return;
+                var route
+                if (event.model)
+                    route = event.model.business.route;
+                else
+                    route = event.currentTarget.attributes['data-route'].nodeValue;
+                this.onRouteClickAux(route);
+            },
+
+            onRouteClickAux: function (route) {
+                this.onDataRouteClick();
+                page(route);
+            },
+        });
+    </script>
+</dom-module>
+<dom-module id="ssn-input" assetpath="../../web.common/elements/">
+    <template>
+        <style>
+            :host {
+                display: inline-block;
+            }
+
+            input[is="iron-input"] {
+                font: inherit;
+                outline: none;
+                box-shadow: none;
+                border: none;
+                width: auto;
+                text-align: center;
+            }
+        </style>
+        <div class="horizontal layout" on-click="onInputClick">
+            <input class="flex" id="ssn1id" style="margin-left:25%" type="text" is="iron-input" mxlength="{{mxlength}}" bind-value="{{ssn1}}" size="{{mxlength}}" on-input="onSSN1Input">
+            <span style="margin: auto 15px"> - </span>
+            <input class="flex" id="ssn2id" style="margin-right:25%" type="text" is="iron-input" mxlength="{{mxlength}}" bind-value="{{ssn2}}" size="{{mxlength}}" on-input="onSSN2Input">
+        </div>
+    </template>
+    <script>
+        Polymer({
+            is: 'ssn-input',
+
+            properties: {
+                value: {
+                    notify: true,
+                    type: String
+                },
+
+                ssn1: {
+                    type: String,
+                    notify: true,
+
+                },
+
+                ssn2: {
+                    notify: true,
+                    type: String
+                },
+                mxlength: {
+                    notify: true,
+                    type: Number
+                },
+            },
+
+            observers: [
+              '_computeValue(ssn1,ssn2)'
+            ],
+            onSSN1Input: function (event) {
+                if (this.ssn1.length > this.mxlength) {
+                    var p1 = this.ssn1.substring(0, this.mxlength);
+                    var p2 = this.ssn1.substring(this.mxlength);
+                    this.ssn1 = p1;
+                    this.ssn2 = p2;
+                    this.$.ssn2id.focus();
+                }
+            },
+            onSSN2Input: function (event) {
+                if (this.ssn2.length == 0)
+                    this.$.ssn1id.focus();
+                else if (this.ssn2.length > this.mxlength)
+                    this.ssn2 = this.ssn2.substring(0, this.mxlength);
+
+            },
+            onInputClick: function () {
+                idInFocus = document.activeElement.id;
+                if (idInFocus != 'ssn1id' && idInFocus != 'ssn2id')
+                    this.$.ssn1id.focus();
+            },
+            _computeValue: function (ssn1, ssn2) {
+                this.value = ssn1.trim() + ssn2.trim();
+            }
+        });
+    </script>
+</dom-module>
+<dom-module id="account-login" assetpath="../../web.common/elements/">
+
+    <template>
+        <style>
+.red-100 {
+    background: var(--google-red-100);
+}
+
+.yellow-100 {
+    background: var(--google-yellow-100);
+}
+
+.blue-100 {
+    background: var(--google-blue-100);
+}
+
+.green-100 {
+    background: var(--google-green-100);
+}
+
+.red-300 {
+    background: var(--google-red-300);
+}
+
+.yellow-300, .checkout-button {
+    background: var(--google-yellow-300);
+}
+
+.blue-300 {
+    background: var(--google-blue-300);
+}
+
+.green-300 {
+    background: var(--google-green-300);
+}
+
+.gray-700{
+    background: var(--google-grey-700);
+}
+paper-material{
+    background-color:white;
+}
+@media (min-width: 601px) {
+    paper-material {
+        padding: 20px;
+    }
+
+    paper-material.with-margins {
+        margin: 15px 40px;
+    }
+}
+
+@media (max-width: 600px) {
+    paper-material {
+        padding: 10px;
+    }
+    
+    paper-material.with-margins {
+        margin: 0;
+    }
+}
+
+.hidden-animation {
+    -webkit-animation: fadein 0.5s; /* Safari, Chrome and Opera > 12.1 */
+    -moz-animation: fadein 0.5s; /* Firefox < 16 */
+    -o-animation: fadein 0.5s; /* Opera < 12.1 */
+    animation: fadein 0.5s;
+}
+
+@keyframes fadein {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+/* Firefox < 16 */
+@-moz-keyframes fadein {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+/* Safari, Chrome and Opera > 12.1 */
+@-webkit-keyframes fadein {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+/* Opera < 12.1 */
+@-o-keyframes fadein {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+</style>
+
+        <style>
+            .login-links {
+                text-align: center;
+                font-size: medium;
+                font-stretch:expanded;
+            }
+
+            a:link, a:visited {
+                color: cornflowerblue;
+            }
+            paper-material {
+                background-image: radial-gradient(rgba(255,255,255,1), rgba(255,255,255,0.9)), url("/public/images/social-media.jpg");
+                background-size: cover;
+                margin-left:0;
+                margin-right:0;
+           }
+            paper-button#fb-login-button {
+                color:white;
+                background-color:rgb(58,86,156);
+                background-image: url("/public/images/facebook_logo.png");
+                background-repeat:no-repeat;
+                background-size:32px 32px;
+                background-position:5px center;
+            }
+
+            paper-button#gsignin2 {
+                background-color:white;
+                background-image: url("/public/images/google_logo.png");
+                background-repeat:no-repeat;
+                background-size:32px 32px;
+                background-position:5px center;
+
+            }
+            paper-button > span {
+                margin-left:28px;
+            }
+            .g-recaptcha {
+                left: 0;
+                right: 0;
+                margin: auto;
+            }
+            .login-links > span {
+                margin: auto 5px;
+                font-size: 0.7em;
+            }
+        </style>
+        <paper-toast id="toast1" text="{{toastText}}"></paper-toast>
+        <paper-material elevation="1" style="min-width:300px;">
+            <iron-pages id="pages" style="width:100%; height:auto" selected="{{mode}}">
+                    <div>
+                        <form is="iron-form" id="reset" method="post" action="{{getUserTypedUrl(route, '/reset')}}" with-credentials="" on-iron-form-response="onResetResponse" on-iron-form-error="onResetError" on-iron-form-submit="onSubmitted" class="hidden-animation">
+                            <div class="fjalla-caption">RESET PASSWORD</div>
+                            <paper-input id="username" name="username" type="email" error-message="Invalid email address" required="" label="Email"></paper-input>
+                            <input name="captcha" class="other-recaptcha" type="hidden" required="">
+                            <div class="g-recaptcha" hidden="{{!showCaptcha}}"></div>
+                            <div class="login-links layout horizontal wrap">
+                                <span><a href="javascript:void(0)" class="login-links" on-click="onLogin">Login</a></span>
+                                <span>  |  </span>
+                                <span><a href="javascript:void(0)" class="login-links" on-click="onRegister">Register</a></span>
+                                <span>  |  </span>
+                                <span><a href="javascript:void(0)" class="login-links" on-click="onSupport">Support</a></span>
+                            </div>
+                            <paper-button class="submit-button blue-300" raised="" on-click="onSubmit">Submit</paper-button>
+                        </form>
+                    </div>
+                    <div>
+                        <form is="iron-form" id="login" method="post" action="{{getUserTypedUrl(route, '/yummlet')}}" with-credentials="" on-iron-form-response="onLoginResponse" on-iron-form-error="onLoginError" on-iron-form-submit="onSubmitted" class="hidden-animation">
+                            <div class="fjalla-caption">LOGIN</div>
+                            <paper-input id="username" name="username" type="email" error-message="Invalid email address or password" required="" label="Email" readonly="{{requireCodeOnLogin}}"></paper-input>
+                            <paper-input name="password" required="" label="Password" type="password" readonly="{{requireCodeOnLogin}}"></paper-input>
+                            <paper-input-container id="logincode" always-float-label="" attr-for-value="value" hidden="{{!requireCodeOnLogin}}" required="{{requireCodeOnLogin}}">
+                                <label>Verification code</label>
+                                <ssn-input class="paper-input-input" mxlength="3" value="{{code}}"></ssn-input>
+                                <paper-input-error>Invalid code. Try again or click support below.</paper-input-error>
+                            </paper-input-container>
+                            <input name="captcha" class="other-recaptcha" type="hidden" required="">
+                            <input name="code" type="hidden" required="" value="{{code}}">
+                            <div class="g-recaptcha" hidden="{{!showCaptcha}}"></div>
+                            <div class="login-links layout horizontal wrap" hidden$="{{loginOnly}}">
+                                <span><a href="javascript:void(0)" class="login-links" on-click="onRegister">Register</a></span>
+                                <span>  |  </span>
+                                <span><a href="javascript:void(0)" class="login-links" on-click="onReset">Forgot password</a></span>
+                                <span>  |  </span>
+                                <span><a href="javascript:void(0)" class="login-links" on-click="onSupport">Support</a></span>
+                            </div>
+                            <paper-button class="submit-button blue-300" raised="" on-click="onSubmit">Submit</paper-button>
+                        </form>
+                    </div>
+                    <div>
+                        <form is="iron-form" id="register" method="post" action="{{getUserTypedUrl(route, '/register')}}" with-credentials="" on-iron-form-response="onRegisterResponse" on-iron-form-error="onRegisterError" on-iron-form-submit="onSubmitted" class="hidden-animation">
+                            <div class="fjalla-caption">REGISTER</div>
+                            <input hidden="" name="userRoute" value="{{userRoute}}">
+                            <paper-input-container id="regcode" always-float-label="" attr-for-value="value" hidden="{{!requireCodeOnRegistration}}" required="{{requireCodeOnRegistration}}">
+                                <label>Registration code</label>
+                                <ssn-input class="paper-input-input" mxlength="4" value="{{code}}"></ssn-input>
+                                <paper-input-error>Invalid code. Try again or click support below.</paper-input-error>
+                            </paper-input-container>
+                            <input name="code" type="hidden" required="" value="{{code}}">
+                            <paper-input name="username" type="email" error-message="Invalid email address" required="" label="Email"></paper-input>
+                            <paper-input auto-validate="" id="password" name="password" required="" label="Password" type="password" allowedpattern="[a-zA-Z0-9]" prevent-invalid-input=""></paper-input>
+                            <paper-input auto-validate="" id="passwordCheck" required="" label="Repeat password" type="password" allowedpattern="[a-zA-Z0-9]" prevent-invalid-input=""></paper-input>
+                            <input name="captcha" class="other-recaptcha" type="hidden" required="">
+                            <div class="g-recaptcha" hidden="{{!showCaptcha}}"></div>
+                            <div class="login-links layout horizontal wrap">
+                                <span><a href="javascript:void(0)" class="login-links" on-click="onLogin">Login</a></span>
+                                <span>  |  </span>
+                                <span><a href="javascript:void(0)" class="login-links" on-click="onReset">Forgot password</a></span>
+                                <span>  |  </span>
+                                <span><a href="javascript:void(0)" class="login-links" on-click="onSupport">Support</a></span>
+                            </div>
+                            <paper-button class="submit-button blue-300" raised="" on-click="onSubmit">Submit</paper-button>
+                        </form>
+                    </div>
+                    <div>
+                        <form is="iron-form" id="support" method="post" action="{{getUserTypedUrl(route, '/support')}}" with-credentials="" on-iron-form-response="onSupportResponse" on-iron-form-error="onSupportError" on-iron-form-submit="onSubmitted" class="hidden-animation">
+                            <div class="fjalla-caption">SUPPORT</div>
+                            <input hidden="" name="userRoute" value="{{userRoute}}">
+                            <paper-input name="name" label="Name"></paper-input>
+                            <paper-input name="email" type="email" error-message="Invalid email address" required="" label="Email"></paper-input>
+                            <gold-phone-input name="phone" label="Phone #" country-code="972" phone-number-pattern="XXX-XXXXXXX">
+                            </gold-phone-input>
+                            <paper-textarea max-rows="3" required="" name="message" label="How can we help?"></paper-textarea>
+                            <div class="login-links layout horizontal wrap">
+                                <span><a href="javascript:void(0)" class="login-links" on-click="onLogin">Login</a></span>
+                                <span>  |  </span>
+                                <span><a href="javascript:void(0)" class="login-links" on-click="onRegister">Register</a></span>
+                                <span>  |  </span>
+                                <span><a href="javascript:void(0)" class="login-links" on-click="onReset">Forgot password</a></span>
+                            </div>
+                            <paper-button class="submit-button blue-300" raised="" on-click="onSubmit">Submit</paper-button>
+                        </form>
+                    </div>
+                    <div>
+                        <paper-input-container id="socialLoginCode" always-float-label="" attr-for-value="value" hidden="{{!requireCodeOnRegistration}}">
+                                <label>Registration code</label>
+                                <ssn-input class="paper-input-input" mxlength="4" value="{{code}}"></ssn-input>
+                                <paper-input-error>Invalid code. Try again or click support below.</paper-input-error>
+                        </paper-input-container>
+                        <br>
+                        <div class="login-links layout horizontal wrap">
+                            <span><a href="javascript:void(0)" class="login-links" on-click="onLogin">Login</a></span>
+                            <span>  |  </span>
+                            <span><a href="javascript:void(0)" class="login-links" on-click="onRegister">Register</a></span>
+                            <span>  |  </span>
+                            <span><a href="javascript:void(0)" class="login-links" on-click="onReset">Forgot password</a></span>
+                            <span>  |  </span>
+                            <span><a href="javascript:void(0)" class="login-links" on-click="onSupport">Support</a></span>
+                        </div>
+                    </div>
+                </iron-pages>
+            <div hidden$="{{disableSocialLogin}}">
+                <h1 class="divider">OR</h1>
+                <paper-button raised="" class="blue-300" id="gsignin2" alt="Google sign-in" on-click="onGoogleClick"><span>Sign in with Google</span></paper-button>
+                <paper-button raised="" class="blue-300" id="fb-login-button" alt="Facebook sign-in" on-click="onFbLoginClick"><span>Sign in with Facebook</span></paper-button>
+            </div>
+        </paper-material>
+    </template>
+    <script>
+        var me;
+  //////////////// FACEBOOK //////////////////////////
+        const BASIC_FB_SCOPES = ['email', 'public_profile'];
+        window.fbAsyncInit = function () {
+            var appId = 1717407078479612;
+            if (_.includes(location.hostname, 'localhost'))
+                appId = 1723458884541098;
+            FB.init({
+                appId: appId,
+                cookie: true,  // enable cookies to allow the server to access
+                // the session
+                xfbml: false,  // parse social plugins on this page
+                version: 'v2.5', // use version 2.5
+                oauth: true,
+                status: true, // check login status
+            });
+            window.dispatchEvent(new Event('FacebookAuthenticationReady'));
+        };
+
+        function fb_login(silent, scopes) {
+            scopes = BASIC_FB_SCOPES.concat(scopes || []).join(', ');
+            if (silent)
+                FB.getLoginStatus(function (response) {
+                    if (response.status === 'connected') {
+                        // the user is logged in and has authenticated your
+                        // app, and response.authResponse supplies
+                        // the user's ID, a valid access token, a signed
+                        // request, and the time the access token 
+                        // and signed request each expire
+                        //var uid = response.authResponse.userID;
+                        //var accessToken = response.authResponse.accessToken;
+                        FBUserHasLoggedIn(response);
+                    } else
+                        fb_login_aux();
+                });
+            else
+                fb_login_aux();
+
+            function fb_login_aux(){
+                FB.login(function (response) {
+                    FBUserHasLoggedIn(response);
+                }, {
+                    scope: scopes
+                });
+            }
+        }
+
+        function FBUserHasLoggedIn(response) {
+            window.dispatchEvent(new Event('FacebookAuthenticationOK'));
+
+            if (response.authResponse && response.status == 'connected') {
+                access_token = response.authResponse.accessToken; //get access token
+                user_id = response.authResponse.userID; //get FB UID
+
+                FB.api('/me', function (response) {
+                    email = response.email; //get user email
+                    name = response.name;
+                    username = response.id;
+                    FB.api(
+                        "/" + username + "/picture?type=large",
+                        function (response) {
+                            if (response && !response.error) {
+                                var image = response.data.url;
+                            }
+                            CommonModule.modules.user.authenticateSocialLogin({
+                                token: access_token,
+                                username: username,
+                                name: name,
+                                email: email,
+                                image: image,
+                                how: 'fb',
+                                route: CommonModule.ROUTE(),
+                                code: me.code
+                            });
+                        }
+                    );
+
+                });
+            }
+        }
+    </script>
+    <script>
+ //////////////// GOOGLE //////////////////////////
+
+        function signInCallback(googleUser) {
+            var auth2 = gapi.auth2.getAuthInstance();
+            // Listen for sign-in state changes.
+            auth2.isSignedIn.listen(signinChanged);
+
+            var profile = googleUser.getBasicProfile();
+            profile = {
+                username: profile.getId(), // Do not send to your backend! Use an ID token instead.
+                token: googleUser.getAuthResponse().id_token,
+                name: profile.getName(),
+                image: profile.getImageUrl(),
+                email: profile.getEmail()
+            };
+            profile.how = 'google';
+            profile.route = CommonModule.ROUTE();
+            profile.code = me.code;
+            CommonModule.modules.user.authenticateSocialLogin(profile);
+        }
+
+        function signOut() {
+            var auth2 = gapi.auth2.getAuthInstance();
+            auth2.signOut().then(function () {
+            });
+        }
+        function signinChanged(p1, p2, p3) {
+            if (!auth2.isSignedIn.get())
+                CommonModule.modules.user.logOutDone();
+        }
+        function google_login(silent) {
+            var options = {};
+            if (silent)
+                options = { prompt: 'none' };
+            auth2.signIn(options).then(function (a) {
+                if (auth2.isSignedIn.get()) {
+                    var googleUser = auth2.currentUser.get();
+                    signInCallback(googleUser);
+                }
+            });
+        }
+
+        function startGoogle() {
+            gapi.load('auth2', function () {
+                auth2 = gapi.auth2.init({
+                    client_id: '910047896261-grc6aga31tgfs50i2h433ubbtt8ijnfa.apps.googleusercontent.com',
+                    // Scopes to request in addition to 'profile' and 'email'
+                    //scope: 'additional_scope'
+                });
+                // Listen for sign-in state changes.
+                window.dispatchEvent(new Event('GoogleAuthenticationReady'));
+            });
+        }
+
+        function onFailure(error) {
+            console.log(error);
+        }
+    </script>
+    <script>
+        //////////// RECAPTCHA ////////////////
+        function onRecaptchaLoad() {
+            var captchas = document.querySelectorAll('.g-recaptcha');
+            _.forEach(captchas, function (captcha) {
+                grecaptcha.render(captcha, {
+                    sitekey: '6LccpRATAAAAALgLw7C6sFyMjA-3ckACE7ggOEf4',
+                    callback: onRecaptchaSuccess,
+                    size: getCaptchaSize()
+                });
+            });
+            window.dispatchEvent(new Event('RecaptchaReady'));
+        }
+        function onRecaptchaSuccess(response) {
+            var captchas = document.querySelectorAll('.other-recaptcha');
+            _.forEach(captchas, function (captcha) {
+                captcha.value = response;
+            });
+
+            hideAllRecaptchas();
+            var elem = $('account-login');
+            elem[0].onSubmit();
+        }
+
+        function hideAllRecaptchas() {
+            var captchas = document.querySelectorAll('.g-recaptcha');
+            _.forEach(captchas, function (captcha) {
+                captcha.hidden = true;
+            });
+        }
+        function getCaptchaSize() {
+            return window.innerWidth < 500 ? 'compact' : 'normal';
+        }
+    </script>
+    <script>
+        var SOCIAL_LOGIN_ATTEMPT = 'Attempting authentication using ';
+        var GOOGLE = 'Google';
+        var FACEBOOK = 'Facebook';
+        var captcha_activated = false;
+        var fb_activated = false;
+        var google_activated = false;
+        Polymer({
+            is: "account-login",
+            behaviors: [
+                Polymer.NeonAnimationRunnerBehavior
+            ],
+            properties: {
+                mode: {
+                    type: Number,
+                    notify: true,
+                    value: function () { return 1; }
+                },
+                toastText: {
+                    type: String,
+                    notify: true
+                },
+                showCaptcha: {
+                    type: Boolean,
+                    notify: true,
+                    value: function () { return false;}
+                },
+                requireCodeOnRegistration: {
+                    type: Boolean,
+                    notify: true,
+                    value: function () { return false;}
+                },
+                requireCodeOnLogin: {
+                    type: Boolean,
+                    notify: true,
+                    value: function () { return false; }
+                },
+                code: {
+                    type: String,
+                    notify:true
+                },
+                loginOnly: {
+                    type: Boolean,
+                    notify: true,
+                    value: function () { return false; }
+                },
+                disableSocialLogin: {
+                    type: Boolean,
+                    notify: true,
+                    value: function () { return false; }
+                },
+                bg: {
+                    type: String,
+                    notify: true,
+                    value: function () { return null; }
+                },
+                route: {
+                    type: String,
+                    notify:true,
+                }
+            },
+            created: function(){
+                ////////// SUBSCRIBE TO SOCIAL LOGINS ////////////
+                PubSub.subscribe('Activate.google',function(){ 
+                    this.async(function () {
+                        //TODO: test this
+                        this.onGoogleLogin.apply(this, true);
+                    }.bind(this));
+                }.bind(this));
+                PubSub.subscribe('Activate.fb', function(msg, data){ 
+                    this.async(function () {
+                        // data = [silent, scopes]
+                        this.onFbLogin.apply(this, data);
+                    }.bind(this));
+                }.bind(this));
+                PubSub.publish('SocialLogin.listening');
+                /////////////////////////////////////////////////
+
+            },
+            ready: function () {
+                this.$.password.validate = this.validatePassword.bind(this);
+                this.$.passwordCheck.validate = this.validatePasswordCheck.bind(this);
+                PubSub.subscribe('User.logged.social.fail', this.onSocialLoginFailed.bind(this));
+            },
+            attached: function () {
+                var children = $("form").children();
+                _.forEach(children, function (child) {
+                    if (_.includes(child.nodeName.toLowerCase(), 'input'))
+                        child.onkeypress = function (event) {
+                            if (event.which == 13) {
+                                event.preventDefault();
+                                this.onSubmit();
+                            }
+                        }.bind(this);
+                }.bind(this));
+
+                me = this;
+
+                if (this.bg) {
+                    var i,
+                        tags = document.querySelectorAll("paper-material");
+                    for (i = 0; i < tags.length; i++) {
+                        tags[i].style.background = this.bg;
+                    }
+                }
+                if (CommonModule.modules.user.shouldLoad.fb && !fb_activated)
+                    this.onFbLogin(true);
+                if (CommonModule.modules.user.shouldLoad.google && !google_activated)
+                    this.onGoogleLogin(true);
+
+                var links = this.querySelectorAll('.login-links');
+                _.forEach(links, function (link) {
+                    link.tabIndex = -1;
+                });
+
+                this.route = CommonModule.ROUTE();
+                PubSub.publish('account-login.ready');
+            },
+            getUserTypedUrl: function (route, subroute) {
+                if (!route) return;
+                return '/login' + route + subroute;
+            },
+            onFbLoginClick: function () {
+                this.onFbLogin(false);
+            },
+            onFbLogin: function (silent, scopes) {
+                window.writeToScreen(SOCIAL_LOGIN_ATTEMPT + FACEBOOK);
+                if (!fb_activated) {
+                    fb_activated = true;
+                    var fsignin = document.createElement('script');
+                    fsignin.setAttribute("src", "//connect.facebook.net/en_US/sdk.js");
+                    this.appendChild(fsignin);
+                    window.addEventListener('FacebookAuthenticationReady', this.onFbLogin.bind(this, silent, scopes));
+                }
+                else
+                    fb_login(silent, scopes);
+            },
+            activateCaptcha: function (callback) {
+                if (captcha_activated) return;
+                captcha_activated = true;
+                var captcha = document.createElement('script');
+                captcha.setAttribute("src", "//www.google.com/recaptcha/api.js?onload=onRecaptchaLoad&render=explicit");
+                this.appendChild(captcha);
+                window.addEventListener('RecaptchaReady', callback);
+            },
+            onGoogleClick: function (event, silent) {
+                this.onGoogleLogin(false);
+            },
+            onGoogleLogin: function (silent) {
+                window.writeToScreen(SOCIAL_LOGIN_ATTEMPT + GOOGLE);
+
+                if (!google_activated) {
+                    google_activated = true;
+                    var gsignin = document.createElement('script');
+                    gsignin.setAttribute("src", "//apis.google.com/js/client:platform.js?onload=startGoogle");
+                    this.appendChild(gsignin);
+                    window.addEventListener('GoogleAuthenticationReady', this.onGoogleLogin.bind(this, silent));
+                }
+                else
+                    google_login(silent);
+            },
+            onRegister: function () {
+                this.mode = 2;
+            },
+            onLogin: function () {
+                this.mode = 1;
+            },
+            onSupport: function(){
+                 this.mode = 3
+            },
+            onReset: function () {
+                this.mode = 0;
+            },
+            onSubmit: function () {
+                var formName = (function () {
+                    switch (this.mode) {
+                        case 0: return 'reset';
+                        case 1: return 'login';
+                        case 2: return 'register';
+                        case 3: return 'support';
+                    }
+                }.bind(this))();
+                if (this.validateCaptcha(formName)) {
+                    document.getElementById(formName).submit();
+                }
+            },
+            onSubmitted:function(){
+                this.disableAllSubmitButtons(true);
+            },
+            validateCaptcha: function (formName) {
+                if (!this.showCaptcha)
+                    return true;
+
+                switch (formName) {
+                    case 'support':
+                        return true;
+                }
+
+
+                // all values are set at once therefore there is only need to check one of them
+                var valid = document.querySelector('.other-recaptcha').value;
+                if (!valid)
+                {
+                    this.toastText = "Please fill out the captcha";
+                    this.$.toast1.show();
+                }
+                return valid;
+            },
+
+            disableAllSubmitButtons: function(disable){
+                var buttons = document.querySelectorAll('.submit-button');
+                _.forEach(buttons, function (b) {
+                    b.disabled = disable;
+                });
+            },
+            onLoginResponse: function (event, data) {
+                CommonModule.modules.user.loggedIn(data.response);
+                this.disableAllSubmitButtons(false);
+            },
+            onLoginError: function (event, data) {
+                var status = this.handleError(event, data);
+                if(status == 401)
+                    this.$.username.invalid = true;
+                else if(status == 449)
+                {
+                    this.requireCodeOnLogin = true;
+                    this.$.logincode.invalid = true;
+                }
+            },
+            onRegisterResponse: function (event, data) {
+                this.toastText = "Thank you! A confirmation mail has been sent to your account.";
+                this.$.toast1.show(function () {
+                    page('/');
+                });
+                this.disableAllSubmitButtons(false);
+            },
+            onRegisterError: function (event, data) {
+                var status = this.handleError(event, data);
+                if (status == 403) {
+                    this.toastText = "Sorry, username taken. Please try another one.";
+                    this.$.toast1.show();
+                }
+            },
+            onResetResponse: function (event, data) {
+                this.toastText = "Check your inbox for further instructions.";
+                this.$.toast1.show(function () {
+                    page('/');
+                });
+                this.disableAllSubmitButtons(false);
+            },
+            onResetError: function (event, data) {
+                this.handleError(event, data);
+            },
+            onSupportResponse: function (event, data) {
+                this.toastText = "Thanks, we'll contact you shortly";
+                this.$.toast1.show();
+                this.disableAllSubmitButtons(false);
+            },
+            onSupportError: function (event, data) {
+                var status = this.handleError(event, data);
+            },
+            handleError: function (event, data) {
+                var status = data.status || parseInt(data.error.message.match(/(\d+).*/)[1]);
+
+                this.disableAllSubmitButtons(false);
+
+                if (status == 500 || status == 503) {
+                    this.toastText = "We encountered a problem. Please try again later.";
+                    this.$.toast1.show();
+                }
+                else if (status == 406) {
+                    this.toastText = "There was a reCAPTCHA error. Please try again.";
+                    this.$.toast1.show();
+                }
+                else if (status == 429) {
+                    this.showCaptcha = true;
+                    this.activateCaptcha(function () {
+                        this.validateCaptcha();
+                    }.bind(this));
+                }
+
+                return status;
+            },
+            onSocialLoginFailed: function (msg, status) {
+                var msg = "Sorry, we're experiencing technical difficulties"
+                var requireCode = this.requireCodeOnRegistration
+                switch (status) {
+                    case 412:
+                        msg = "Activation is required";
+                        break;
+                    case 423:
+                        msg = "Expecting password change";
+                        requireCode=false;
+                        break;
+                    case 401:
+                        msg = "Incorrect username/password";
+                        break;
+                    case 403:
+                        msg = "Account is inactive";
+                        requireCode=false;
+                        break;
+                    default:
+                        msg = "Failed to verify authentication."
+                }
+                if (requireCode) {
+                    this.mode = 4;
+                    var valid = !this.requireCodeOnRegistration || this.$.socialLoginCode.value;
+                    this.$.socialLoginCode.invalid = !valid;
+                }
+                this.toastText = msg;
+                this.$.toast1.show();
+            },
+            validatePasswordCheck: function () {
+                if (this.$.password.invalid) return false;
+                this.$.passwordCheck.errorMessage = "Password mismatch";
+                this.$.passwordCheck.invalid = this.$.password.value != this.$.passwordCheck.value;
+                return !this.$.passwordCheck.invalid;
+
+            },
+            validatePassword: function () {
+                var numerals = /(?=.*\d+)/;
+                var letters = /(?=.*[a-zA-Z]+)/;
+                var length = /.{6,18}/;
+
+                var invalid = true;
+                var err;
+                if (!numerals.test(this.$.password.value))
+                    this.$.password.errorMessage = 'Must contain at least one digit';
+                else if (!letters.test(this.$.password.value))
+                    this.$.password.errorMessage = 'Must contain at least one letter';
+                else if (!length.test(this.$.password.value))
+                    this.$.password.errorMessage = 'Must be at between 6-18 characters long';
+                else
+                    invalid = false;
+                this.$.password.invalid = invalid;
+                this.disableAllSubmitButtons(!invalid);
+                return !invalid;
+            },
+        });
+
+    </script>
+</dom-module>
+<dom-module id="account-logout" assetpath="../../web.common/elements/">
+
+    <template>
+        <style>
+.red-100 {
+    background: var(--google-red-100);
+}
+
+.yellow-100 {
+    background: var(--google-yellow-100);
+}
+
+.blue-100 {
+    background: var(--google-blue-100);
+}
+
+.green-100 {
+    background: var(--google-green-100);
+}
+
+.red-300 {
+    background: var(--google-red-300);
+}
+
+.yellow-300, .checkout-button {
+    background: var(--google-yellow-300);
+}
+
+.blue-300 {
+    background: var(--google-blue-300);
+}
+
+.green-300 {
+    background: var(--google-green-300);
+}
+
+.gray-700{
+    background: var(--google-grey-700);
+}
+paper-material{
+    background-color:white;
+}
+@media (min-width: 601px) {
+    paper-material {
+        padding: 20px;
+    }
+
+    paper-material.with-margins {
+        margin: 15px 40px;
+    }
+}
+
+@media (max-width: 600px) {
+    paper-material {
+        padding: 10px;
+    }
+    
+    paper-material.with-margins {
+        margin: 0;
+    }
+}
+
+.hidden-animation {
+    -webkit-animation: fadein 0.5s; /* Safari, Chrome and Opera > 12.1 */
+    -moz-animation: fadein 0.5s; /* Firefox < 16 */
+    -o-animation: fadein 0.5s; /* Opera < 12.1 */
+    animation: fadein 0.5s;
+}
+
+@keyframes fadein {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+/* Firefox < 16 */
+@-moz-keyframes fadein {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+/* Safari, Chrome and Opera > 12.1 */
+@-webkit-keyframes fadein {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+/* Opera < 12.1 */
+@-o-keyframes fadein {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+</style>
+
+        <style>
+        </style>
+        <div class="layout vertical center">
+            <iron-image class="circular-avatar-big" sizing="cover" preload="" fade="" src="{{profilePicture}}"></iron-image>
+            <paper-material>
+                <h4>Welcome <span>{{profile.name}}</span>,</h4>
+                <p>{{getConnectionMethod(profile)}}</p>
+                <paper-button raised="" class="blue-300" on-click="onLogOut" style="display:block">log out</paper-button>
+            </paper-material>
+        </div>
+    </template>
+    <script>
+        Polymer({
+            is: "account-logout",
+            properties: {
+                profilePicture: {
+                    type: String,
+                    notify: true,
+                    value: function () { return "";}
+                },
+                profile: {
+                    type: Object,
+                    notify: true,
+                    value: function () { return {}; }
+                }
+            },
+            ready: function () {
+            },
+            attached: function () {
+                PubSub.subscribe('User.logged.in', this.updateValues.bind(this));
+                this.updateValues();
+            },
+            updateValues: function () {
+                if (!CommonModule.modules.user.current.is()) return;
+                this.profile = CommonModule.modules.user.current.profile();
+                this.profilePicture = CommonModule.modules.user.current.image();
+                },
+            onLogOut: function(){
+                CommonModule.modules.user.logOut();
+            },
+            getConnectionMethod: function () {
+                if (!CommonModule.modules) return;
+                return "You're currently signed in using " + CommonModule.modules.user.current.friendlyHow();
+            }
+        });
+
+    </script>
+</dom-module>
+<dom-module id="account-manager" assetpath="/">
+    <template>
+        <style>
+.red-100 {
+    background: var(--google-red-100);
+}
+
+.yellow-100 {
+    background: var(--google-yellow-100);
+}
+
+.blue-100 {
+    background: var(--google-blue-100);
+}
+
+.green-100 {
+    background: var(--google-green-100);
+}
+
+.red-300 {
+    background: var(--google-red-300);
+}
+
+.yellow-300, .checkout-button {
+    background: var(--google-yellow-300);
+}
+
+.blue-300 {
+    background: var(--google-blue-300);
+}
+
+.green-300 {
+    background: var(--google-green-300);
+}
+
+.gray-700{
+    background: var(--google-grey-700);
+}
+paper-material{
+    background-color:white;
+}
+@media (min-width: 601px) {
+    paper-material {
+        padding: 20px;
+    }
+
+    paper-material.with-margins {
+        margin: 15px 40px;
+    }
+}
+
+@media (max-width: 600px) {
+    paper-material {
+        padding: 10px;
+    }
+    
+    paper-material.with-margins {
+        margin: 0;
+    }
+}
+
+.hidden-animation {
+    -webkit-animation: fadein 0.5s; /* Safari, Chrome and Opera > 12.1 */
+    -moz-animation: fadein 0.5s; /* Firefox < 16 */
+    -o-animation: fadein 0.5s; /* Opera < 12.1 */
+    animation: fadein 0.5s;
+}
+
+@keyframes fadein {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+/* Firefox < 16 */
+@-moz-keyframes fadein {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+/* Safari, Chrome and Opera > 12.1 */
+@-webkit-keyframes fadein {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+/* Opera < 12.1 */
+@-o-keyframes fadein {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+</style>
+        <style>
+           paper-dialog{
+               padding: 0;
+               margin: 0;
+               --paper-dialog-background-color:rgba(230,230,230,0.5);
+           }
+        </style>
+        <paper-dialog id="accountDialog" modal="" auto-fit-on-attach="" no-cancel-on-esc-key="" entry-animation="scale-up-animation" exit-animation="scale-down-animation">
+            <account-login require-code-on-registration="" bg="white" login-only="" disable-social-login=""></account-login>
+        </paper-dialog>
+    </template>
+    <script>
+        Polymer({
+            is: "account-manager",
+            properties: {
+                isLoggedIn: {
+                    type: Boolean,
+                    notify: true,
+                    value: function () { return false; }
+                },
+                backdrop: {
+                    type: String,
+                    notify: true
+                },
+                backdropElement: {
+                    type: Object,
+                    notify: true
+                }
+            },
+            ready: function () {
+                PubSub.subscribe('User.logged', this.onSessionChange.bind(this));
+                $('body').bind("cut copy paste", function (e) {
+                    if (!CommonModule.modules.user.current.is())
+                        e.preventDefault();
+                }.bind(this));
+            },
+            attached: function () {
+                this.setupBackdrop();
+                this.onSessionChange();
+            },
+            setupBackdrop: function () {
+                if (this.backdrop) {
+                    this.backdropElement = $(this.backdrop)[0];
+                    this.backdropElement.ontouchstart = function (e) {
+                        if (!CommonModule.modules.user.current.is())
+                            e.preventDefault();
+                    };
+                    this.backdropElement.ontouchmove = function (e) {
+                        if (!CommonModule.modules.user.current.is())
+                            e.preventDefault();
+                    }
+                }
+            },
+            toggleBackdropState: function () {
+                if (this.backdrop && this.backdropElement) {
+                    this.toggleClass('blurred', !this.isLoggedIn, this.backdropElement);
+                    this.backdropElement.disabled = !this.isLoggedIn;
+                    var dialog = this.$.accountDialog;
+                    if (!this.isLoggedIn)
+                        dialog.open();
+                    else
+                        dialog.close();
+                }
+            },
+            onArticleCountChange: function () {
+                    this.isBasketEmpty = !CommonModule.modules.tab.current.count();
+            },
+            onSessionChange: function (msg, value) {
+                this.isLoggedIn = CommonModule.modules.user.current.is();
+                this.toggleBackdropState();
+            },
+        });
+
+    </script>
+</dom-module>
+<dom-module id="pos-user" assetpath="/">
+    <template>
+        <style>
+.red-100 {
+    background: var(--google-red-100);
+}
+
+.yellow-100 {
+    background: var(--google-yellow-100);
+}
+
+.blue-100 {
+    background: var(--google-blue-100);
+}
+
+.green-100 {
+    background: var(--google-green-100);
+}
+
+.red-300 {
+    background: var(--google-red-300);
+}
+
+.yellow-300, .checkout-button {
+    background: var(--google-yellow-300);
+}
+
+.blue-300 {
+    background: var(--google-blue-300);
+}
+
+.green-300 {
+    background: var(--google-green-300);
+}
+
+.gray-700{
+    background: var(--google-grey-700);
+}
+paper-material{
+    background-color:white;
+}
+@media (min-width: 601px) {
+    paper-material {
+        padding: 20px;
+    }
+
+    paper-material.with-margins {
+        margin: 15px 40px;
+    }
+}
+
+@media (max-width: 600px) {
+    paper-material {
+        padding: 10px;
+    }
+    
+    paper-material.with-margins {
+        margin: 0;
+    }
+}
+
+.hidden-animation {
+    -webkit-animation: fadein 0.5s; /* Safari, Chrome and Opera > 12.1 */
+    -moz-animation: fadein 0.5s; /* Firefox < 16 */
+    -o-animation: fadein 0.5s; /* Opera < 12.1 */
+    animation: fadein 0.5s;
+}
+
+@keyframes fadein {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+/* Firefox < 16 */
+@-moz-keyframes fadein {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+/* Safari, Chrome and Opera > 12.1 */
+@-webkit-keyframes fadein {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+/* Opera < 12.1 */
+@-o-keyframes fadein {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+</style>
+        <style>
+.grid {
+    padding: 0;
+    -webkit-flex-wrap: wrap; /* Safari 6.1+ */
+    display: flex;
+    -ms-flex-wrap: wrap;
+    flex-wrap: wrap;
+    -ms-flex-direction: row;
+    -webkit-flex-direction: row;
+    flex-direction: row;
+    -ms-align-content: flex-start;
+    -webkit-align-content: flex-start;
+    align-content: flex-start;
+    justify-content: flex-start;
+}
+
+.grid-item-size {
+    min-width: 100px;
+    width: 100px;
+    max-width: 140px;
+    min-height: 155px;
+    height: 155px;
+    max-height: 155px;
+}
+
+.grid-item{
+        -moz-box-sizing: border-box;
+    -webkit-box-sizing: border-box;
+    box-sizing: border-box;
+        margin: 1px 1px 5px;
+    cursor: pointer;
+    -ms-flex: 1 1 100px;
+    -webkit-flex: 1 1 100px;
+    flex: 1 1 100px;
+}
+
+
+
+@media (min-width: 641px) {
+    .grid-item {
+        min-width: 100px;
+        margin: 5px;
+    }
+
+    .grid {
+        padding: 10px;
+    }
+}
+
+.map-info-window {
+    min-width: 150px;
+    min-height: 150px;
+    max-width: 300px;
+    max-height: 300px;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    -moz-box-sizing: border-box;
+    -webkit-box-sizing: border-box;
+    box-sizing: border-box;
+}
+
+
+paper-card {
+    text-align: center;
+    --paper-card-header-text: {
+    text-transform: uppercase;
+    -ms-text-overflow: ellipsis;
+    -o-text-overflow: ellipsis;
+    text-overflow: ellipsis;
+    font-size: xx-small;
+    padding: 5px 0 0;
+    margin: 0;
+    vertical-align: central;
+    font-family: Tahoma;
+    font-weight: bold;
+    background: linear-gradient(rgba(0,0,0, 0.3),rgba(0,0,0, 0.3));
+    width: auto;
+    height: 35px;
+    bottom: 4px;
+    left: 0;
+    right: 0;
+    color: white;
+}
+
+--paper-card-header-image: {
+    height: 90px;
+    --iron-image-height: 100%;
+}
+
+--paper-card-actions: {
+    height: 80%;
+}
+
+}
+
+.stars, .stars span {
+    display: block;
+    background: url("../../public/images/small-stars.png") 0 -12px repeat-x;
+    width: 60px;
+    height: 12px;
+}
+
+    .stars span {
+        background-position: 0 0;
+    }
+
+.stars-div {
+    position: absolute;
+    top: -0.5px;
+}
+
+</style>
+        <style>
+            :host {
+                width:100%;
+                max-width: 800px;
+            }
+
+            table {
+                width: 100%;
+            }
+
+            .marked-item {
+                color: blue;
+            }
+
+            .list-container {
+                max-height: 300px;
+                overflow: auto;
+            }
+
+            .user-entry {
+                display: block;
+                padding: 10px;
+            }
+
+            .view80 {
+                width: 80%;
+                font-size: small;
+                left: 0;
+                right: 0;
+                margin: auto;
+            }
+
+            paper-button {
+                display: block;
+            }
+        </style>
+        <paper-toast id="toast1"></paper-toast>
+        <paper-material class="user-entry">
+            <div class="fjalla-caption">{{user.name}}</div>
+            <form is="iron-form" id="upsertForm" method="post" action="/admins/access/upsert/user/pos" with-credentials="" on-iron-form-response="onResponse" on-iron-form-error="onError" on-iron-form-submit="onSubmitted" class="hidden-animation">
+                <input type="hidden" required="" name="id" value="{{user.id}}">
+                <paper-input id="nameInput" name="name" required="" label="Name" value="{{user.name}}"></paper-input>
+                <paper-input name="email" type="email" label="Email" value="{{user.email}}"></paper-input>
+                <paper-input name="phone_number" label="Phone #" required="" value="{{user.phone_number}}"></paper-input>
+                <paper-textarea max-rows="5" name="_internal_comment" label="Comments (private)" value="{{user._internal_comment}}"></paper-textarea>
+                <input type="hidden" required="" name="businesses" value="{{businessesStringified}}">
+                <input type="hidden" name="code" value="{{user.code}}">
+            </form>
+
+            <div class="grid">
+                <template is="dom-repeat" items="{{businesses}}" as="business">
+                    <business-grid-item hide-actions="" small="" fullname="" business="{{business}}" on-remove-click="removeItem"></business-grid-item>
+                </template>
+            </div>
+                <div class="layout horizontal center center-justified">
+                    <span class="flex"></span>
+                    <iron-icon icon="search" style="color:blue;"></iron-icon>
+                    <input id="searchInput" type="search" on-blur="onSearchBlur" style="display:block; height:40px;" class="view80" on-input="onSearchInput">
+                    <span class="flex"></span>
+                </div>
+                <div style="position:absolute; z-index:2; width:100%; background:lightblue">
+                    <template is="dom-repeat" items="{{suggestions}}" as="suggestion">
+                        <paper-item class="suggestion" on-click="onSuggestionSelect">{{suggestion.fullname}}</paper-item>
+                    </template>
+                </div>
+            <paper-material id="allBusinessesDiv" class="list-container view80" on-scroll="onBusinessScroll">
+                <paper-listbox id="businessListBox" multi="" selected-class="marked-item" on-iron-select="onActiveBusinessesChange" on-iron-deselect="onActiveBusinessesChange">
+                    <template is="dom-repeat" items="{{allBusinesses}}" as="business">
+                        <paper-item style$="{{getListItemStyle(index)}}">
+                            <span>{{business.fullname}}</span>
+                        </paper-item>
+                    </template>
+                </paper-listbox>
+            </paper-material>
+            <paper-button class="blue-300" raised="" on-click="onSubmit">Submit</paper-button>
+        </paper-material>
+        <paper-material>
+            <form is="iron-form" id="codeForm" method="post" action="/admins/access/send/sms-code/user/pos" with-credentials="" on-iron-form-response="onCodeResponse" on-iron-form-error="onCodeError" on-iron-form-submit="onSubmitted" class="hidden-animation">
+                <input type="hidden" required="" name="name" value="{{user.name}}">
+                <div class="fullbleed layout horizontal center center-justified">
+                    <span class="flex"></span>
+                    <paper-icon-button icon="visibility" on-mousedown="onShowCode" on-mouseup="onShowCode"></paper-icon-button>
+                    <input id="regcode" type="password" readonly="" required="" class="view80" name="code" style="font-size:medium; height: 40px; text-align:center" placeholder="NO EXISTING CODE" value="{{user.code}}">
+                    <span class="flex"></span>
+                </div>
+                <paper-button class="yellow-300" raised="" on-click="onSendSMSCode">SEND</paper-button>
+            </form>
+        </paper-material>
+        <div class="layout horizontal around-justified center">
+            <paper-button class="green-300" style="width:65%; " raised="" on-click="onClose">
+                Close
+            </paper-button>
+            <paper-fab class="red-300" icon="delete" on-click="onDelete" alt="Delete"></paper-fab>
+            <paper-fab class="gray-700" icon="av:not-interested" toggles="" on-click="onDeactivate" alt="Deactivate"></paper-fab>
+        </div>
+        <paper-dialog id="deleteDlg" on-iron-overlay-closed="onDialogClosed">
+            <p>Confirm <strong>delete</strong></p>
+            <div class="buttons">
+                <paper-button dialog-dismiss="">Cancel</paper-button>
+                <paper-button dialog-confirm="">Delete</paper-button>
+            </div>
+        </paper-dialog>
+    </template>
+    <script>
+        const ALL_BUSINESSES_BUFFER_SIZE = 100;
+        var businessesLoadedFromServer = false;
+        const INITIAL_DB_CONFIG = { start: 0, end: ALL_BUSINESSES_BUFFER_SIZE }
+        const MAX_SUGGESTIONS = 5;
+        var businessDB;
+
+        Polymer({
+            is: "pos-user",
+            properties: {
+                user: {
+                    type: Object,
+                    notify: true,
+                    observer: 'updateUserDetails'
+                },
+                businesses: {
+                    type: Array,
+                    notify: true,
+                    reflectToAttribute: true,
+                    value: function () { return []; },
+                },
+                businessesStringified: {
+                    type: String,
+                    notify: true,
+                },
+                allBusinesses: {
+                    type: Array,
+                    notify: true,
+                    value: function () { return []; },
+                },
+                suggestions: {
+                    type: Array,
+                    notify: true
+                }
+            },
+            observers: [
+                'businessesToString(businesses.splices)'
+            ],
+            ready: function () {
+            },
+            attached: function () {
+                PubSub.subscribe('Business.ready', function () {
+                    businessesLoadedFromServer = true;
+                    this.initAllBusinesses()
+                }.bind(this));
+            },
+            initAllBusinesses:function(){
+                this.splice('allBusinesses', 0);
+                this.businessDB = _.clone(INITIAL_DB_CONFIG);
+            },
+            updateUserDetails: function () {
+                this.$.nameInput.focus();
+                this.splice('businesses', 0, this.businesses.length);
+                _.forEach(this.user.placeids, function (placeid) {
+                    var business = CommonModule.modules.business.get(placeid);
+                    if (business)
+                        this.push('businesses', business);
+                }.bind(this));
+            },
+            load: function (user) {
+                if (!businessesLoadedFromServer)
+                    return setTimeout(function (user) { this.load(user); }.bind(this), 1000, user);
+                if (user)
+                    this.user = user;
+                if (!this.allBusinesses.length) {
+                    var slice = _.slice(CommonModule.modules.business.getAll(), this.businessDB.start, this.businessDB.end);
+                    this.splice.apply(this, ['allBusinesses', 0, this.allBusinesses.length].concat(slice));
+                }
+                else {
+                    var dy = this.$.allBusinessesDiv.scrollTop / 50;
+                    var unit = ALL_BUSINESSES_BUFFER_SIZE / 4;
+                    if (dy < unit) return;
+
+                    if (this.businessDB.end + unit > CommonModule.modules.business.getAll().length) return;
+                    this.businessDB.start += unit;
+                    this.businessDB.end = Math.min(this.businessDB.end + unit, CommonModule.modules.business.getAll().length);
+                    var slice = _.slice(CommonModule.modules.business.getAll(), this.businessDB.start + unit * 3, this.businessDB.end);
+
+                    //this.splice('allBusinesses', 0, unit);
+                    this.splice.apply(this, ['allBusinesses', unit * 4, 0].concat(slice));
+                }
+            },
+            locked: false,
+            onSearchInput: function (event) {
+                if (this.locked) return;
+                this.locked = true;
+                setTimeout(function (event) {
+                    var results = _.filter(CommonModule.modules.business.getAll(), function (b) {
+                        return _.includes(b.fullname, event.srcElement.value);
+                    });
+                    results.length = Math.min(results.length, MAX_SUGGESTIONS);
+                    this.suggestions = results;
+                    this.locked = false;
+                }.bind(this), 200, event);
+            },
+            onSearchBlur: function (event) {
+                if (event.relatedTarget && _.includes(event.relatedTarget.className, 'suggestion')) return;
+                this.suggestions = [];
+            },
+            onBusinessScroll: function (event, data) {
+                this.load();
+            },
+            onSubmit: function () {
+                this.$.upsertForm.submit();
+            },
+            onSendSMSCode: function () {
+                this.$.codeForm.submit();
+            },
+            onSubmitted: function () {
+                this.disableButtons(true);
+            },
+            onEndRequest: function (msg) {
+                this.disableButtons(false);
+                this.$.toast1.text = msg;
+                this.$.toast1.show();
+            },
+            onResponse: function (event, data) {
+                this.onEndRequest('200 success');
+                this.set('user.code', data.response.code);
+                this.set('user.id', data.response.id);
+            },
+            onCodeResponse: function (event, data) {
+                this.onEndRequest('200 success');
+            },
+            onError: function (event) {
+                this.onEndRequest(event.detail.error);
+            },
+            onCodeError: function (event) {
+                this.onEndRequest(event.detail.error);
+            },
+            disableButtons: function (disable) {
+                var buttons = this.querySelectorAll('paper-button');
+                _.forEach(buttons, function (button) {
+                    button.disabled = disable;
+                });
+            },
+            onSuggestionSelect: function (event, data) {
+                this.onActiveBusinessesChange(event, data, event.model.suggestion);
+                this.suggestions = [];
+            },
+            onActiveBusinessesChange: function (event, data, business) {
+                business = business || data.item._templateInstance.business;
+                var index = _.findIndex(this.businesses, function (b) { return b.placeid == business.placeid; });
+                if (index < 0)
+                    this.push('businesses', business);
+                else
+                    this.removeItemByIndex(index);
+            },
+            removeItem: function (event, business) {
+                var selected = this.$.businessListBox.selectedValues;
+                this.$.businessListBox.selectedValues = _.filter(selected, function (s) {
+                    return this.$.businessListBox.items[s]._templateInstance.business.placeid != business.placeid;
+                }.bind(this));
+                var index = _.findIndex(this.businesses, function (b) { return b.placeid == business.placeid; });
+                this.removeItemByIndex(index);
+            },
+            removeItemByIndex: function (index) {
+                this.splice('businesses', index, 1);
+            },
+            getListItemStyle: function (index) {
+                if (index % 2)
+                    return 'background: white';
+                return 'background: whitesmoke';
+            },
+            businessesToString: function () {
+                this.businessesStringified = JSON.stringify(this.businesses);
+            },
+            onShowCode: function (event) {
+                console.log('mouse: ' + event.type)
+                if (event.type == 'mousedown')
+                    this.$.regcode.type = 'text';
+                else
+                    this.$.regcode.type = 'password';
+            },
+            onClose: function (event) {
+                this.fire('close');
+                this.$.allBusinessesDiv.scrollTop = 0;
+            },
+            onDialogClosed: function (event) {
+                if (event.detail.confirmed) {
+                    CommonModule.posusers.deletePOSUser(this.user);
+                    this.onClose();
+                }
+            },
+            onDelete: function () {
+                this.$.deleteDlg.open();
+            },
+            onDeactivate: function (event) {
+                var active = event.currentTarget.active;
+                CommonModule.modules.user_manager.setActivationState(this.user, active);
+                event.currentTarget.style.color = active ? 'blue' : '';
+                this.$.toast1.text = active ? 'User has been deactivated' : 'User is now active';
+                this.$.toast1.show();
+            },
+        });
+    </script>
+</dom-module>
+<dom-module id="pos-user-manager" assetpath="/">
+    <template>
+        <style>
+.red-100 {
+    background: var(--google-red-100);
+}
+
+.yellow-100 {
+    background: var(--google-yellow-100);
+}
+
+.blue-100 {
+    background: var(--google-blue-100);
+}
+
+.green-100 {
+    background: var(--google-green-100);
+}
+
+.red-300 {
+    background: var(--google-red-300);
+}
+
+.yellow-300, .checkout-button {
+    background: var(--google-yellow-300);
+}
+
+.blue-300 {
+    background: var(--google-blue-300);
+}
+
+.green-300 {
+    background: var(--google-green-300);
+}
+
+.gray-700{
+    background: var(--google-grey-700);
+}
+paper-material{
+    background-color:white;
+}
+@media (min-width: 601px) {
+    paper-material {
+        padding: 20px;
+    }
+
+    paper-material.with-margins {
+        margin: 15px 40px;
+    }
+}
+
+@media (max-width: 600px) {
+    paper-material {
+        padding: 10px;
+    }
+    
+    paper-material.with-margins {
+        margin: 0;
+    }
+}
+
+.hidden-animation {
+    -webkit-animation: fadein 0.5s; /* Safari, Chrome and Opera > 12.1 */
+    -moz-animation: fadein 0.5s; /* Firefox < 16 */
+    -o-animation: fadein 0.5s; /* Opera < 12.1 */
+    animation: fadein 0.5s;
+}
+
+@keyframes fadein {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+/* Firefox < 16 */
+@-moz-keyframes fadein {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+/* Safari, Chrome and Opera > 12.1 */
+@-webkit-keyframes fadein {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+/* Opera < 12.1 */
+@-o-keyframes fadein {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+</style>
+        <style>
+            :host {
+                display: block;
+                padding: 25px;
+            }
+            paper-fab{
+                width:80px;
+                height:80px;
+                margin:20px 35px 50px;
+            }
+            add-button{
+
+            }
+        </style>
+        <div hidden$="{{!listMode}}" class="fullbleed horizontal layout wrap">
+            <template is="dom-repeat" items="{{users}}" as="user">
+                    <user-avatar user="{{user}}" on-click="onUserSelected"></user-avatar>
+            </template>
+            <paper-fab icon="social:person-add" on-click="onAddUser"></paper-fab>
+        </div>
+        <div hidden$="{{listMode}}" class="vertical layout center">
+            <pos-user id="userView" on-close="onUserUnselected"></pos-user>
+        </div>
+    </template>
+    <script>
+        Polymer({
+            is: "pos-user-manager",
+            properties: {
+                users: {
+                    type: Array,
+                    notify: true,
+                    value: function () { return []; }
+                },
+                listMode: {
+                    type: Boolean,
+                    notify: true,
+                    value: function () { return true;}
+                }
+            },
+            ready: function () {
+                PubSub.subscribe('App.ready', function () {
+                    this.async(function () {
+                        this.updateUsers();
+                    }.bind(this));
+                }.bind(this));
+                PubSub.subscribe('UserManager.end', function (msg, user) {
+                    this.updateUsers();
+                }.bind(this));
+
+            },
+            attached: function () {
+            },
+            updateUsers: function () {
+                var users = CommonModule.modules.user_manager.get();
+                this.splice.apply(this, ['users', 0, this.users.length].concat(users));
+            },
+            onUserSelected: function (event) {
+                this.$.userView.load(event.currentTarget.user);
+                this.listMode = false;
+            },
+            onUserUnselected: function (event) {
+                CommonModule.modules.user_manager.refresh();
+                this.listMode = true;
+            },
+            onAddUser: function (event) {
+                event.currentTarget.user = { is: 'ADD-USER', name: 'New User', _internal_comment: '-', phone_number: 972526789237 };
+                this.onUserSelected(event);
+            }
+        });
+
+    </script>
+</dom-module>
+<dom-module id="error-card" assetpath="../../web.common/elements/">
+    <style>
+        :host {
+            display: block;
+        }
+
+        .fixed {
+            position: fixed;
+            top: 0;
+            left: 0;
+            height: 100vh;
+            width: 100vw;
+        }
+
+        .card {
+            position: relative;
+            margin: 200px 100px 0;
+            height: 700px;
+        }
+    </style>
+    <template>
+        <style>
+.red-100 {
+    background: var(--google-red-100);
+}
+
+.yellow-100 {
+    background: var(--google-yellow-100);
+}
+
+.blue-100 {
+    background: var(--google-blue-100);
+}
+
+.green-100 {
+    background: var(--google-green-100);
+}
+
+.red-300 {
+    background: var(--google-red-300);
+}
+
+.yellow-300, .checkout-button {
+    background: var(--google-yellow-300);
+}
+
+.blue-300 {
+    background: var(--google-blue-300);
+}
+
+.green-300 {
+    background: var(--google-green-300);
+}
+
+.gray-700{
+    background: var(--google-grey-700);
+}
+paper-material{
+    background-color:white;
+}
+@media (min-width: 601px) {
+    paper-material {
+        padding: 20px;
+    }
+
+    paper-material.with-margins {
+        margin: 15px 40px;
+    }
+}
+
+@media (max-width: 600px) {
+    paper-material {
+        padding: 10px;
+    }
+    
+    paper-material.with-margins {
+        margin: 0;
+    }
+}
+
+.hidden-animation {
+    -webkit-animation: fadein 0.5s; /* Safari, Chrome and Opera > 12.1 */
+    -moz-animation: fadein 0.5s; /* Firefox < 16 */
+    -o-animation: fadein 0.5s; /* Opera < 12.1 */
+    animation: fadein 0.5s;
+}
+
+@keyframes fadein {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+/* Firefox < 16 */
+@-moz-keyframes fadein {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+/* Safari, Chrome and Opera > 12.1 */
+@-webkit-keyframes fadein {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+/* Opera < 12.1 */
+@-o-keyframes fadein {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+</style>
+        <paper-material animated="true" elevation="1" id="card" style="width:100%;height:100%">
+            <div style="left:20vw; top:20vh">
+                <h2 class="page-title">{{title}}</h2>
+                <p>{{message}}</p>
+            </div>
+        </paper-material>
+    </template>
+    <script>
+
+        Polymer({
+
+            is: 'error-card',
+
+            behaviors: [
+              Polymer.NeonAnimatableBehavior
+            ],
+
+            properties: {
+
+                title: {
+                    type: String,
+                    notify: true
+                },
+                message: {
+                    type: String,
+                    notify: true
+                },
+                animationConfig: {
+                    type: Object,
+                    value: function () {
+                        return {
+                            'entry': [{
+                                name: 'scale-up-animation',
+                                node: this.$.card
+                            }],
+                            'exit': [{
+                                name: 'scale-down-animation',
+                                node: this.$.card
+                            }]
+                        };
+                    }
+                }
+
+            }
+        });
+
+    </script>
+</dom-module>
+<dom-module id="user-avatar" assetpath="../../web.common/elements/">
+
+    <template>
+        <style>
+.red-100 {
+    background: var(--google-red-100);
+}
+
+.yellow-100 {
+    background: var(--google-yellow-100);
+}
+
+.blue-100 {
+    background: var(--google-blue-100);
+}
+
+.green-100 {
+    background: var(--google-green-100);
+}
+
+.red-300 {
+    background: var(--google-red-300);
+}
+
+.yellow-300, .checkout-button {
+    background: var(--google-yellow-300);
+}
+
+.blue-300 {
+    background: var(--google-blue-300);
+}
+
+.green-300 {
+    background: var(--google-green-300);
+}
+
+.gray-700{
+    background: var(--google-grey-700);
+}
+paper-material{
+    background-color:white;
+}
+@media (min-width: 601px) {
+    paper-material {
+        padding: 20px;
+    }
+
+    paper-material.with-margins {
+        margin: 15px 40px;
+    }
+}
+
+@media (max-width: 600px) {
+    paper-material {
+        padding: 10px;
+    }
+    
+    paper-material.with-margins {
+        margin: 0;
+    }
+}
+
+.hidden-animation {
+    -webkit-animation: fadein 0.5s; /* Safari, Chrome and Opera > 12.1 */
+    -moz-animation: fadein 0.5s; /* Firefox < 16 */
+    -o-animation: fadein 0.5s; /* Opera < 12.1 */
+    animation: fadein 0.5s;
+}
+
+@keyframes fadein {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+/* Firefox < 16 */
+@-moz-keyframes fadein {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+/* Safari, Chrome and Opera > 12.1 */
+@-webkit-keyframes fadein {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+/* Opera < 12.1 */
+@-o-keyframes fadein {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+</style>
+
+        <style>
+            :host {
+                width: 150px;
+                height: 150px;
+                padding:0;
+                display: flex;
+                text-align: center;
+                cursor:pointer;
+            }
+            .status-textfield{
+                display:block;
+                color:white;
+                font-weight:bold;
+                margin:2px 0;
+            }
+            p{
+                margin: 5px 0;
+            }
+        </style>
+            <div class="vertical layout center center-justified" style="width:100%; height:100%">
+                <paper-button class="circular-avatar-small" raised="" style$="{{getImageStyle(user.image)}}"></paper-button>
+                <p>{{user.name}}</p>
+                <small class="status-textfield" style$="{{getStatusStyle(user.status)}}">{{user.status}}</small>
+            </div>
+    </template>
+    <script>
+        var STATUS_COLOR = {
+            awaiting: 'blue',
+            registered: 'green',
+            expired: 'red'
+        }
+        Polymer({
+            is: "user-avatar",
+            properties: {
+                user: {
+                    type: Object,
+                    notify: true,
+                },
+                addButton: {
+                    type: Boolean,
+                    notify: true,
+                }
+            },
+            ready: function () {
+            },
+            attached: function () {
+                this.async(function () {
+                    if (!this.user.image) {
+                        this.set('user.image', '/public/images/unknown_user.png');
+                        this.set('user.status', this.user.expires/1000 < new Date().getTime() ? 'expired' : this.user.status);
+                    }
+                }.bind(this));
+            },
+            getStatusStyle: function (status) {
+                return 'background-color: ' + STATUS_COLOR[status];
+            },
+            getImageStyle: function (image) {
+                return 'background: center center /cover no-repeat url(' + image + ');';
+            }
+
+        });
+
+    </script>
+</dom-module>
+<dom-module id="data-loader-progress" assetpath="../../web.common/elements/">
+    <template>
+        <style>
+.red-100 {
+    background: var(--google-red-100);
+}
+
+.yellow-100 {
+    background: var(--google-yellow-100);
+}
+
+.blue-100 {
+    background: var(--google-blue-100);
+}
+
+.green-100 {
+    background: var(--google-green-100);
+}
+
+.red-300 {
+    background: var(--google-red-300);
+}
+
+.yellow-300, .checkout-button {
+    background: var(--google-yellow-300);
+}
+
+.blue-300 {
+    background: var(--google-blue-300);
+}
+
+.green-300 {
+    background: var(--google-green-300);
+}
+
+.gray-700{
+    background: var(--google-grey-700);
+}
+paper-material{
+    background-color:white;
+}
+@media (min-width: 601px) {
+    paper-material {
+        padding: 20px;
+    }
+
+    paper-material.with-margins {
+        margin: 15px 40px;
+    }
+}
+
+@media (max-width: 600px) {
+    paper-material {
+        padding: 10px;
+    }
+    
+    paper-material.with-margins {
+        margin: 0;
+    }
+}
+
+.hidden-animation {
+    -webkit-animation: fadein 0.5s; /* Safari, Chrome and Opera > 12.1 */
+    -moz-animation: fadein 0.5s; /* Firefox < 16 */
+    -o-animation: fadein 0.5s; /* Opera < 12.1 */
+    animation: fadein 0.5s;
+}
+
+@keyframes fadein {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+/* Firefox < 16 */
+@-moz-keyframes fadein {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+/* Safari, Chrome and Opera > 12.1 */
+@-webkit-keyframes fadein {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+/* Opera < 12.1 */
+@-o-keyframes fadein {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+</style>
+        <style>
+        </style>
+        <paper-progress id="progressBar" value="{{percent}}"></paper-progress>
+    </template>
+    <script>
+
+        Polymer({
+
+            is: 'data-loader-progress',
+
+            properties: {
+                percent: {
+                    type: Number,
+                    notify: true,
+                    observer: 'onPercentChange'
+                },
+            },
+            ready: function () {
+            },
+            attached: function () {
+            },
+            onPercentChange: function () {
+                return this.$.progressBar.hidden = !(this.percent % 100)
+            }
+        });
+    </script>
+</dom-module>
+<dom-module id="business-grid-item" assetpath="/">
+    <template>
+        <style>
+.red-100 {
+    background: var(--google-red-100);
+}
+
+.yellow-100 {
+    background: var(--google-yellow-100);
+}
+
+.blue-100 {
+    background: var(--google-blue-100);
+}
+
+.green-100 {
+    background: var(--google-green-100);
+}
+
+.red-300 {
+    background: var(--google-red-300);
+}
+
+.yellow-300, .checkout-button {
+    background: var(--google-yellow-300);
+}
+
+.blue-300 {
+    background: var(--google-blue-300);
+}
+
+.green-300 {
+    background: var(--google-green-300);
+}
+
+.gray-700{
+    background: var(--google-grey-700);
+}
+paper-material{
+    background-color:white;
+}
+@media (min-width: 601px) {
+    paper-material {
+        padding: 20px;
+    }
+
+    paper-material.with-margins {
+        margin: 15px 40px;
+    }
+}
+
+@media (max-width: 600px) {
+    paper-material {
+        padding: 10px;
+    }
+    
+    paper-material.with-margins {
+        margin: 0;
+    }
+}
+
+.hidden-animation {
+    -webkit-animation: fadein 0.5s; /* Safari, Chrome and Opera > 12.1 */
+    -moz-animation: fadein 0.5s; /* Firefox < 16 */
+    -o-animation: fadein 0.5s; /* Opera < 12.1 */
+    animation: fadein 0.5s;
+}
+
+@keyframes fadein {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+/* Firefox < 16 */
+@-moz-keyframes fadein {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+/* Safari, Chrome and Opera > 12.1 */
+@-webkit-keyframes fadein {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+/* Opera < 12.1 */
+@-o-keyframes fadein {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+</style>
+        <style>
+.grid {
+    padding: 0;
+    -webkit-flex-wrap: wrap; /* Safari 6.1+ */
+    display: flex;
+    -ms-flex-wrap: wrap;
+    flex-wrap: wrap;
+    -ms-flex-direction: row;
+    -webkit-flex-direction: row;
+    flex-direction: row;
+    -ms-align-content: flex-start;
+    -webkit-align-content: flex-start;
+    align-content: flex-start;
+    justify-content: flex-start;
+}
+
+.grid-item-size {
+    min-width: 100px;
+    width: 100px;
+    max-width: 140px;
+    min-height: 155px;
+    height: 155px;
+    max-height: 155px;
+}
+
+.grid-item{
+        -moz-box-sizing: border-box;
+    -webkit-box-sizing: border-box;
+    box-sizing: border-box;
+        margin: 1px 1px 5px;
+    cursor: pointer;
+    -ms-flex: 1 1 100px;
+    -webkit-flex: 1 1 100px;
+    flex: 1 1 100px;
+}
+
+
+
+@media (min-width: 641px) {
+    .grid-item {
+        min-width: 100px;
+        margin: 5px;
+    }
+
+    .grid {
+        padding: 10px;
+    }
+}
+
+.map-info-window {
+    min-width: 150px;
+    min-height: 150px;
+    max-width: 300px;
+    max-height: 300px;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    -moz-box-sizing: border-box;
+    -webkit-box-sizing: border-box;
+    box-sizing: border-box;
+}
+
+
+paper-card {
+    text-align: center;
+    --paper-card-header-text: {
+    text-transform: uppercase;
+    -ms-text-overflow: ellipsis;
+    -o-text-overflow: ellipsis;
+    text-overflow: ellipsis;
+    font-size: xx-small;
+    padding: 5px 0 0;
+    margin: 0;
+    vertical-align: central;
+    font-family: Tahoma;
+    font-weight: bold;
+    background: linear-gradient(rgba(0,0,0, 0.3),rgba(0,0,0, 0.3));
+    width: auto;
+    height: 35px;
+    bottom: 4px;
+    left: 0;
+    right: 0;
+    color: white;
+}
+
+--paper-card-header-image: {
+    height: 90px;
+    --iron-image-height: 100%;
+}
+
+--paper-card-actions: {
+    height: 80%;
+}
+
+}
+
+.stars, .stars span {
+    display: block;
+    background: url("../../public/images/small-stars.png") 0 -12px repeat-x;
+    width: 60px;
+    height: 12px;
+}
+
+    .stars span {
+        background-position: 0 0;
+    }
+
+.stars-div {
+    position: absolute;
+    top: -0.5px;
+}
+
+</style>
+        <style>
+            .big {
+                min-width: 300px;
+                width: 300px;
+                max-width: 350px;
+                min-height: 400px;
+                height: 400px;
+                max-height: 400px;
+                --paper-card-header-image: {
+                    height: 250px;
+                    --iron-image-height: 100%;
+                }
+            }
+
+            .small {
+                min-width: 100px;
+                width: 100px;
+                max-width: 180px;
+                min-height: 180px;
+                height: 180px;
+                max-height: 180px;
+                --paper-card-header-image: {
+                    height: 100px;
+                    --iron-image-height: 100%;
+                }
+            }
+
+            .custom {
+                min-width: 100px;
+                width: 100px;
+                max-width: 130px;
+                min-height: 140px;
+                height: 140px;
+                max-height: 140px;
+                padding:0;
+                --paper-card-header-image: {
+                    max-height: 100px;
+                    height: 100px;
+                    --iron-image-height: 100%;
+                }
+            }
+        </style>
+        <paper-card id="container" class="grid-item custom" heading="{{getName(business)}}" on-click="_onClick" on-mouseover="onMouseOverCard" on-mouseout="onMouseOutOfCard" image="/public/images/notfound.jpg" animated-shadow="" elevation="1">
+            <div class="card-content" style="text-align:justify; font-size:xx-small; margin:0; padding: 2px">
+            </div>
+            <div class="card-actions" style="margin:0; padding: 0; height:40px">
+                <paper-icon-button icon="close" active="true"></paper-icon-button>
+            </div>
+        </paper-card>
+    </template>
+    <script>
+
+        const CARD_HOVER_ELEVATION = 3;
+        const CARD_ELEVATION = 1;
+        const MAX_WIDTH_STAR_RATING = 60;
+        const OUT_OF_TOTAL_STARS = 5;
+        const UPPER_THRESHOLD_FOR_SHORT_METER_DISPLAY = 950;
+        var businessHashTable = {}
+        Polymer({
+
+            is: 'business-grid-item',
+
+            behaviors: [
+              Polymer.NeonAnimatableBehavior
+            ],
+
+            properties: {
+                business: {
+                    type: Object,
+                    readyOnly: true,
+                    notify: true
+                },
+                size: {
+                    type: String,
+                    readyOnly: true,
+                    value: function () { return 'small'; } // other option: big
+                },
+                shape: {
+                    type: String,
+                    readyOnly: true,
+                    value: function () { return 'square'; } // other option: round
+                },
+                fullname:{
+                    type: String,
+                    readyOnly: true,
+                },
+                hideActions: {
+                    type: Boolean,
+                    readyOnly: true,
+                    value: function () { return false; }
+                }
+
+            },
+            ready: function () {
+            },
+            attached: function () {
+                //this.setSize();
+                //this.setShape();
+            },
+            setSize: function () {
+                this.toggleClass(this.size, true, this.$.container);
+            },
+            setShape: function () {
+                //this.toggleClass(this.shape, true, this.$.container);
+            },
+            getName: function(business){
+                if(this.fullname)
+                    return business.fullname
+                return business.name;
+            },
+            onMouseOverCard: function (event) {
+                event.currentTarget.attributes.elevation.value = CARD_HOVER_ELEVATION;
+            },
+            onMouseOutOfCard: function (event) {
+                event.currentTarget.attributes.elevation.value = CARD_ELEVATION;
+            },
+            _onClick: function (event) {
+                if(event.currentTarget.dataHost)
+                var business = event.currentTarget.dataHost.business;
+                var target = event.target;
+                if (target.icon == 'close')
+                    return this.fire('remove-click', business);
+            },
+        });
+    </script>
+</dom-module>
+<dom-module id="admin-view" assetpath="/">
+
+    <template>
+        <style>
+.red-100 {
+    background: var(--google-red-100);
+}
+
+.yellow-100 {
+    background: var(--google-yellow-100);
+}
+
+.blue-100 {
+    background: var(--google-blue-100);
+}
+
+.green-100 {
+    background: var(--google-green-100);
+}
+
+.red-300 {
+    background: var(--google-red-300);
+}
+
+.yellow-300, .checkout-button {
+    background: var(--google-yellow-300);
+}
+
+.blue-300 {
+    background: var(--google-blue-300);
+}
+
+.green-300 {
+    background: var(--google-green-300);
+}
+
+.gray-700{
+    background: var(--google-grey-700);
+}
+paper-material{
+    background-color:white;
+}
+@media (min-width: 601px) {
+    paper-material {
+        padding: 20px;
+    }
+
+    paper-material.with-margins {
+        margin: 15px 40px;
+    }
+}
+
+@media (max-width: 600px) {
+    paper-material {
+        padding: 10px;
+    }
+    
+    paper-material.with-margins {
+        margin: 0;
+    }
+}
+
+.hidden-animation {
+    -webkit-animation: fadein 0.5s; /* Safari, Chrome and Opera > 12.1 */
+    -moz-animation: fadein 0.5s; /* Firefox < 16 */
+    -o-animation: fadein 0.5s; /* Opera < 12.1 */
+    animation: fadein 0.5s;
+}
+
+@keyframes fadein {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+/* Firefox < 16 */
+@-moz-keyframes fadein {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+/* Safari, Chrome and Opera > 12.1 */
+@-webkit-keyframes fadein {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+/* Opera < 12.1 */
+@-o-keyframes fadein {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+</style>
+
+        <style>
+            @media (min-width: 601px) {
+                .padded {
+                    padding: 48px 62px;
+                }
+            }
+
+            :host {
+                display: block;
+                z-index: 1;
+            }
+
+            .fixed {
+                position: relative;
+                height: 100%;
+                width: 100%;
+            }
+        </style>
+        <neon-animated-pages class="fixed" id="pages" selected="[[selection]]" entry-animation="{{entryAnimation}}" exit-animation="{{exitAnimation}}" on-iron-deselect="onDeselected">
+            <div class="padded">
+                <error-card id="error-card-id"></error-card>
+            </div>
+            <pos-user-manager id="pos-user-manager-id" on-back-click="_onBackClick"></pos-user-manager>
+            <div id="account-id" hidden$="{{!isLoggedIn}}"><account-logout></account-logout></div>
+        </neon-animated-pages>
+    </template>
+    <script>
+
+        const ERROR_PAGE = 0;
+        const POS_USER_MANAGER_PAGE = 1;
+        const ACCOUNT_PAGE = 2;
+
+        const ENTRY = "slide-from-right-animation";
+        const EXIT = "slide-left-animation";
+        const BACK_ENTRY = "slide-from-left-animation";
+        const BACK_EXIT = "slide-right-animation";
+        var wasBackClick = false;
+        Polymer({
+            is: "admin-view",
+            properties: {
+                selection: {
+                    type: Number,
+                    notify: true,
+                    value: function () { return 0; },
+                    observer: 'onSelectionChanged'
+                },
+                entryAnimation: {
+                    type: String,
+                    notify: true,
+                    value: function () { return ENTRY; }
+                },
+                exitAnimation: {
+                    type: String,
+                    notify: true,
+                    value: function () { return EXIT; }
+                },
+                backHistory: {
+                    type: Array,
+                    notify: true,
+                    value: function () { return []; },
+                },
+                isLoggedIn: {
+                    type: Boolean,
+                    notify: true,
+                    value: function () { return false; }
+                }
+            },
+            observers: [
+                'isBackEnabled(backHistory.length)'
+            ],
+            ready: function () {
+                PubSub.subscribe('neonpages.POSUserManager', this.onRequestSelectionChange.bind(this, POS_USER_MANAGER_PAGE));
+                PubSub.subscribe('neonpages.Account', this.onRequestSelectionChange.bind(this, ACCOUNT_PAGE));
+                PubSub.subscribe('User.logged', this.onSessionChange.bind(this));
+            },
+            attached: function () {
+                this.async(function () { window.dispatchEvent(new Event('PolymerElementsLoaded')) }.bind(this));
+                this.async(function () { this.onSessionChange(); }.bind(this));
+            },
+            onSessionChange: function (msg, value) {
+                this.isLoggedIn = CommonModule.modules.user.current.is();
+            },
+            onRequestSelectionChange: function (selection) {
+                this.selection = selection;
+            },
+            isBackEnabled: function (value) {
+                //this.$.backButton.hidden = !value;
+            },
+            onBackClick: function (event) {
+                var customBack = this.$.pages.selectedItem.onBackClick;
+                if (customBack)
+                    return (customBack.bind(this.$.pages.selectedItem.this))();
+
+                this._onBackClick(event);
+            },
+            _onBackClick: function (event) {
+                if (!this.backHistory.length) return;
+                this.entryAnimation = BACK_ENTRY;
+                this.exitAnimation = BACK_EXIT;
+
+                wasBackClick = true;
+                this.selection = this.pop('backHistory');
+
+                setTimeout(function () {
+                    this.entryAnimation = ENTRY;
+                    this.exitAnimation = EXIT;
+                }.bind(this), 500);
+            },
+            onSelectionChanged: function () {
+                PubSub.publish('app.scrollToTop');
+                switch (this.selection) {
+                    default:
+                }
+            },
+            onDeselected: function (event, moreinfo) {
+                var prev = event.target._prevSelected;
+                if (!wasBackClick)
+                    this.push('backHistory', prev);
+                wasBackClick = false;
+            }
+        });
+
+
+    </script>
+</dom-module>
+</div></body></html>

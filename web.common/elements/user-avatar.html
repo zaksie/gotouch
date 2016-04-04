@@ -1,0 +1,70 @@
+﻿
+<dom-module id="user-avatar">
+
+    <template>
+        <link rel="import" type="css" href="../../web.common/styles/shared-by-elements.css">
+
+        <style>
+            :host {
+                width: 150px;
+                height: 150px;
+                padding:0;
+                display: flex;
+                text-align: center;
+                cursor:pointer;
+            }
+            .status-textfield{
+                display:block;
+                color:white;
+                font-weight:bold;
+                margin:2px 0;
+            }
+            p{
+                margin: 5px 0;
+            }
+        </style>
+            <div class="vertical layout center center-justified" style="width:100%; height:100%">
+                <paper-button class="circular-avatar-small" raised style$="{{getImageStyle(user.image)}}"></paper-button>
+                <p>{{user.name}}</p>
+                <small class="status-textfield" style$="{{getStatusStyle(user.status)}}">{{user.status}}</small>
+            </div>
+    </template>
+    <script>
+        var STATUS_COLOR = {
+            awaiting: 'blue',
+            registered: 'green',
+            expired: 'red'
+        }
+        Polymer({
+            is: "user-avatar",
+            properties: {
+                user: {
+                    type: Object,
+                    notify: true,
+                },
+                addButton: {
+                    type: Boolean,
+                    notify: true,
+                }
+            },
+            ready: function () {
+            },
+            attached: function () {
+                this.async(function () {
+                    if (!this.user.image) {
+                        this.set('user.image', '/public/images/unknown_user.png');
+                        this.set('user.status', this.user.expires/1000 < new Date().getTime() ? 'expired' : this.user.status);
+                    }
+                }.bind(this));
+            },
+            getStatusStyle: function (status) {
+                return 'background-color: ' + STATUS_COLOR[status];
+            },
+            getImageStyle: function (image) {
+                return 'background: center center /cover no-repeat url(' + image + ');';
+            }
+
+        });
+
+    </script>
+</dom-module>

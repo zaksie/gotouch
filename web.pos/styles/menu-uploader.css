@@ -1,0 +1,135 @@
+﻿
+#main {
+    min-height: calc(100vh - 64px);
+}
+
+.business-title {
+    position:absolute;
+    width: 100%;
+    display:block;
+    font-size: x-small;
+    font-weight: bold;
+    text-transform:uppercase;
+    z-index:2;
+    opacity:0.5;
+    -moz-transform: rotate(-90deg);
+    -ms-transform: rotate(-90deg);
+    -o-transform: rotate(-90deg);
+    -webkit-transform: rotate(-90deg);
+    transform: rotate(-90deg);
+    -moz-transform-origin: right bottom 0;
+    -ms-transform-origin: right bottom 0;
+    -o-transform-origin: right bottom 0;
+    -webkit-transform-origin: right bottom 0;
+	transform-origin: right bottom 0;
+}
+
+@keyframes reveal {
+    from {
+        height: 0;
+        padding: 0;
+        opacity: 0;
+    }
+
+    to {
+        height: 100%;
+        padding: 20px;
+        opacity: 1;
+    }
+}
+
+paper-material {
+    -moz-transition: all 0.5s ease;
+    -o-transition: all 0.5s ease;
+    -webkit-transition: all 0.5s ease;
+    transition: all 0.5s ease;
+    -moz-animation-name: reveal;
+    -o-animation-name: reveal;
+    -webkit-animation-name: reveal;
+    animation-name: reveal;
+    -moz-animation-duration: 0.5s;
+    -o-animation-duration: 0.5s;
+    -webkit-animation-duration: 0.5s;
+    animation-duration: 0.5s;
+    -moz-animation-fill-mode: forwards;
+    -o-animation-fill-mode: forwards;
+    -webkit-animation-fill-mode: forwards;
+    animation-fill-mode: forwards;
+    height: 0;
+    overflow: hidden;
+    padding: 0;
+}
+
+#no1 {
+    background-color: #1A237E;
+    color: #448AFF;
+    -moz-animation-delay: 0.5s;
+    -o-animation-delay: 0.5s;
+    -webkit-animation-delay: 0.5s;
+    animation-delay: 0.5s;
+}
+
+#no2 {
+    background-color: #303F9F;
+    color: #9FA8DA;
+    -moz-animation-delay: 1s;
+    -o-animation-delay: 1s;
+    -webkit-animation-delay: 1s;
+    animation-delay: 1s;
+}
+
+#no3 {
+    background-color: #3F51B5;
+    color: #E8EAF6;
+    -moz-animation-delay: 1.5s;
+    -o-animation-delay: 1.5s;
+    -webkit-animation-delay: 1.5s;
+    animation-delay: 1.5s;
+    opacity: 0;
+}
+
+#no4 {
+    background-color: #E8EAF6;
+    color: #1A237E;
+    -moz-animation-delay: 2s;
+    -o-animation-delay: 2s;
+    -webkit-animation-delay: 2s;
+    animation-delay: 2s;
+}
+
+paper-fab#dropzone {
+    -moz-transition: background-color 0.5s ease;
+    -o-transition: background-color 0.5s ease;
+    -webkit-transition: background-color 0.5s ease;
+    transition: background-color 0.5s ease;
+    width: 80px;
+    height: 80px;
+    background-color: rgba(234,246,232,0.5);
+    --paper-fab-iron-icon:{pointer-events: none;width: 40px;height: 40px;}
+}
+
+paper-input, paper-textarea, paper-dropdown-menu {
+    display: block;
+    width: 90%;
+    max-width: 500px;
+    --paper-input-container-input-color: white;
+    --paper-dropdown-menu-input: white;
+    --paper-input-container-label:{color: lightblue;}
+}
+
+paper-button {
+    display: block;
+    width: 90%;
+    max-width: 300px;
+}
+
+.file-name {
+    font-size: xx-small;
+    text-transform: uppercase;
+    text-shadow: 1px;
+    max-width: 50px;
+}
+
+paper-dropdown-menu {
+    z-index: 2;
+}

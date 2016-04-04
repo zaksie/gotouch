@@ -1,0 +1,378 @@
+﻿
+<dom-module id="menu-editor">
+
+    <template>
+        <link rel="import" type="css" href="../../web.common/styles/shared-by-elements.css">
+        <link rel="import" type="css" href="../../web.common/styles/menu-section.css">
+        <link rel="import" type="css" href="../../web.common/styles/image-gallery-css3d.css">
+        <style>
+            #container {
+                height: calc( 100vh - 64px );
+                overflow: hidden;
+                width: 100%;
+            }
+
+            .canvas {
+                margin-bottom: 20px;
+                position: absolute;
+            }
+
+            paper-icon-button {
+                margin: 25px;
+            }
+
+            #subcontainer {
+                width: 100%;
+                height: 100%;
+                left: 0;
+                right: 0;
+                top: 0;
+                bottom: 0;
+                margin: auto;
+                position: relative;
+            }
+
+            #pictureContainer {
+                position: relative;
+                overflow-y: auto;
+            }
+
+            #description {
+                width: 100%;
+                max-width: 600px;
+                margin: 10px;
+            }
+
+            .no-margin {
+                margin: 0;
+            }
+
+            .no-padding {
+                padding: 0;
+            }
+
+            .short {
+                width: 150px;
+            }
+        </style>
+        <div id="container">
+            <div id="subcontainer" class="vertical layout">
+                <div id="header" class="fullbleed layout horizontal center center-justified">
+                    <div>
+                        <paper-icon-button id="before" icon="image:navigate-before" on-click="onNavigateBefore" disabled$="{{getNavBeforeDisabledState(page)}}"></paper-icon-button>
+                        <paper-tooltip for="before">Previous page</paper-tooltip>
+                    </div>
+                    <span class="flex"></span>
+                    <div>
+                        <paper-icon-button id="back" icon="zoom-out" on-click="onBackClick" disabled$="{{!section.parent_id}}"></paper-icon-button>
+                        <paper-tooltip for="back">Go back a section</paper-tooltip>
+                    </div>
+                    <div>
+                        <paper-icon-button id="section-select" toggles icon="image:crop-free" style$="{{getSectionIconStyle(sectionCropSelected)}}" on-click="onSectionCropToggle"></paper-icon-button>
+                        <paper-tooltip for="section-select">Select section - sections represent a group of related products or other sections</paper-tooltip>
+                    </div>
+                    <div>
+                        <paper-icon-button id="article-select" toggles src="/public/images/ic_format_shapes_black_24px.svg" style$="{{getArticleIconStyle(articleCropSelected)}}" on-click="onArticleCropToggle"></paper-icon-button>
+                        <paper-tooltip for="article-select">Select item - items represent products and cannot be zoomed in further</paper-tooltip>
+                    </div>
+                    <span class="flex"></span>
+                    <div>
+                        <paper-icon-button id="next" icon="image:navigate-next" on-click="onNavigateNext" disabled$="{{getNavNextDisabledState(page)}}"></paper-icon-button>
+                        <paper-tooltip for="next">Next page</paper-tooltip>
+                    </div>
+                </div>
+                <div class="fullbleed layout vertical center center-justified"
+                     hidden$="{{!articleCropSelected}}">
+                    <span>Description</span>
+                    <iron-autogrow-textarea id="description" bind-value="{{details.description}}" max-rows="4" rows="4"></iron-autogrow-textarea>
+                    <div class="layout horizontal center around-justified" style="width:70%">
+                        <paper-input class="short" label="Name" type="text" id="name" value="{{details.name}}"></paper-input>
+                        <paper-input class="short" label="Price" type="number" id="price" value="{{details.price}}">
+                            <div suffix> ₪ </div>
+                        </paper-input>
+                        <paper-input class="short" label="SKU" type="text" id="sku" value="{{details.sku}}">
+                            <iron-icon src="/public/images/barcode.png" suffix></iron-icon>
+                        </paper-input>
+                    </div>
+                </div>
+                <div id="pictureContainer" class="flex">
+                    <div id="menuPicture" class="menu-picture canvas" style$="{{getPictureSizeAndBG(section, sizeChange)}}">
+                        <template is="dom-repeat" items="{{section.sections}}" as="subsection">
+                            <div class="no-margin no-padding layout horizontal center-justified" style$="{{getSubsectionStyle(subsection, size.*)}}">
+                                <paper-icon-button class="no-margin" icon="{{getSubsectionActionIcon(subsection)}}" style="display:block; background-color:rgba(0,255,0, 0.4);color: white;" on-click="onSectionDivShow"></paper-icon-button>
+                                <paper-icon-button class="no-margin" icon="close" style="display:block; background-color:rgba(255,255,255, 0.4);" on-click="onSectionDivRemove"></paper-icon-button>
+                            </div>
+                        </template>
+                    </div>
+                    <img-crop id="menuPictureCropper" hidden$="{{!isCropMode(sectionCropSelected,articleCropSelected)}}" class="menu-picture canvas"
+                              on-complete="onSelectComplete"
+                              on-ok="onSelectApprove"
+                              on-cancel="onSelectCancel"
+                              style$="{{getPictureSize(section)}}"></img-crop>
+                    <paper-spinner id="spinner" hidden></paper-spinner>
+                </div>
+            </div>
+        </div>
+    </template>
+    <script>
+        Polymer({
+            is: "menu-editor",
+            behaviors: [
+                Polymer.IronResizableBehavior
+            ],
+            properties: {
+                business: {
+                    type: Object,
+                    notify: true
+                },
+                menu: {
+                    type: Object,
+                    notify: true
+                },
+                page: {
+                    type: Object,
+                    notify: true,
+                    value: function () { return { width: '600px', height: '800px' } },
+                    observer: 'onPageChange'
+                },
+                section: {
+                    type: Object,
+                    notify: true,
+                    observer: 'onSectionChange'
+                },
+                details: {
+                    type: Object,
+                    notify: true,
+                    value: function () { return {} },
+                },
+                sectionCropSelected: {
+                    type: Boolean,
+                    notify: true,
+                    observer: 'onSectionCropSelected'
+                },
+                articleCropSelected: {
+                    type: Boolean,
+                    notify: true,
+                },
+                size: {
+                    type: Object,
+                    notify: true
+                },
+                sizeChange: {
+                    type: Boolean,
+                    notify: true,
+                    value: function () { return true; }
+                },
+            },
+            listeners: {
+                'iron-resize': 'onResize'
+            },
+            ready: function () {
+            },
+            attached: function () {
+                this.async(function () {
+                    this.page = this.menu.pages[0];
+                    this.sectionCropSelected = false;
+                    this.articleCropSelected = false;
+                    this.notifyResize();
+
+                    $(window).resize(function (e) {
+                        this.onResize(e);
+                    }.bind(this));
+
+                    PubSub.subscribe('Menu.getArticleData', function (msg, data) {
+                        this.set('details.description', data.description);
+                        this.set('details.name', data.name);
+                        this.set('details.price', data.price);
+                    }.bind(this));
+
+                    PubSub.subscribe('Menu.addSection', function (msg, new_section) {
+                        this.pushNewSection(new_section);
+                        this.section = new_section;
+                    }.bind(this));
+
+                    PubSub.subscribe('Menu.addArticle', function (msg, new_section) {
+                        this.pushNewSection(new_section);
+                        this.articleCropSelected = false;
+                    }.bind(this));
+
+                }.bind(this), 1);
+            },
+            getPictureSize: function () {
+                return CommonModule.modules.menu.visual.getPictureStyle(this.section, this.page, $('#mainContainer').width()).size.text;
+            },
+            getPictureSizeAndBG: function () {
+                var value = CommonModule.modules.menu.visual.getPictureStyle(this.section, this.page, $('#mainContainer').width());
+                this.size = value.size;
+                return value.size.text + value.bg;
+            },
+            getSubsectionStyle: function (subsection) {
+                var position = this.getSubsectionPosition(subsection);
+                var style = 'position: absolute; top: ' + position.top + 'px; left: ' + position.left + 'px; width: ' + position.width + 'px; height: ' + position.height + 'px;';
+                if (subsection.final) {
+                    return 'background-color: rgba(0,0,255, 0.2); border: dashed 1px black;' + style;
+                }
+                else {
+                    return 'background-color: rgba(0,255,0, 0.2); border: solid 1px gray; ' + style;
+                }
+            },
+            getSubsectionPosition: function (subsection) {
+                return {
+                    left: (subsection.start[0] - this.section.start[0]) * this.section.zoom.x * this.size.width,
+                    top: (subsection.start[1] - this.section.start[1]) * this.section.zoom.y * this.size.height,
+                    width: subsection.width * this.size.width,
+                    height: subsection.height * this.size.height
+                };
+            },
+            getSubsectionActionIcon: function (subsection) {
+                return subsection.final ? 'image:edit' : 'visibility';
+            },
+            onPageChange: function () {
+                if (!this.page.jpg)
+                    return;
+                this.section = this.page;
+            },
+            onSectionChange: function () {
+                this.sectionCropSelected = this.articleCropSelected = false;
+            },
+            onSaveDebouncer: function (section) {
+                if (section.sections.length)
+                    this.debounce('onSaveDebouncer', this.onSave.bind(this), 3000);
+            },
+            onSave: function () {
+                CommonModule.modules.menu.savePage(this.page);
+            },
+            onSectionCropToggle: function (event) {
+                this.sectionCropSelected = event.currentTarget.active;
+            },
+            onArticleCropToggle: function (event) {
+                this.articleCropSelected = event.currentTarget.active;
+                this.onArticleCropSelected();
+            },
+            onBackClick: function () {
+                if (this.section && this.section.parent_id)
+                    this.section = CommonModule.modules.menu.findParentSection(this.page, this.section.parent_id);
+            },
+            onResize: function (event) {
+                this.sizeChange = !this.sizeChange;
+            },
+            onSectionCropSelected: function () {
+                this.$["section-select"].active = this.sectionCropSelected;
+                if (this.sectionCropSelected) {
+                    this.$.menuPictureCropper.color = 'black';
+                    this.articleCropSelected = false;
+                    this.$.menuPictureCropper._setSize(this.$.menuPicture.clientWidth, this.$.menuPicture.clientHeight);
+                }
+            },
+            onArticleCropSelected: function (section) {
+                this.details = {};
+                this.articleCropSelected = this.articleCropSelected || !!section;
+                this.$["article-select"].active = this.articleCropSelected;
+                if (this.articleCropSelected) {
+                    this.$.menuPictureCropper.color = 'blue';
+                    this.sectionCropSelected = false;
+                    this.$.menuPictureCropper._setSize(this.$.menuPicture.clientWidth, this.$.menuPicture.clientHeight);
+                    if (section) {
+                        this.removeSubsection(section);
+                        this.details = {
+                            price: section.price || 0,
+                            name: section.name || "",
+                            description: section.description || "",
+                            sku: section.sku || "",
+                            id: section.id
+                        };
+                        this.$.menuPictureCropper.editSection(this.getSubsectionPosition(section));
+                    }
+                }
+            },
+            removeSubsection: function (subsection) {
+                var index = _.findIndex(this.section.sections, function (s) { return s.id == subsection.id });
+                this.splice('section.sections', index, 1);
+            },
+            isCropMode: function (sectionMode, articleMode) {
+                return sectionMode || articleMode;
+            },
+            getSectionIconStyle: function (value) {
+                return value ? 'background-color: lightblue' : '';
+            },
+            getArticleIconStyle: function (value) {
+                return value ? 'background-color: lightblue' : '';
+            },
+            onSelectComplete: function (event, unprocessedSelection) {
+                if (!this.articleCropSelected) return;
+
+                var selection = this.processSelection(unprocessedSelection);
+                CommonModule.modules.menu.getArticleDescription(this, selection);
+            },
+            onSelectApprove: function (event, unprocessedSelection) {
+                var selection = this.processSelection(unprocessedSelection);
+
+                if (this.sectionCropSelected) {
+                    CommonModule.modules.menu.addSection(this.section, selection);
+                }
+                else if (this.articleCropSelected) {
+                    this.saveArticle(selection)
+                }
+            },
+            onSelectCancel: function () {
+                this.articleCropSelected = this.sectionCropSelected = false;
+            },
+            saveArticle: function (selection) {
+                this.details.placeid = this.business.placeid;
+                CommonModule.modules.menu.addArticle(this.section, selection, this.details);
+            },
+            pushNewSection: function (new_section) {
+                var index = _.findIndex(this.section.sections, function (s) { return s.id == new_section.id; });
+                if (index > -1)
+                    this.splice('section.sections', index, 1, new_section);
+                else
+                    this.push('section.sections', new_section);
+                this.onSaveDebouncer(this.section);
+            },
+            processSelection: function (selection) {
+                selection.t /= this.$.menuPictureCropper.clientHeight;
+                selection.h /= this.$.menuPictureCropper.clientHeight;
+                selection.l /= this.$.menuPictureCropper.clientWidth;
+                selection.w /= this.$.menuPictureCropper.clientWidth;
+
+                return selection;
+            },
+            onSectionDivShow: function (event) {
+                var subsection = event.model.subsection;
+                if (subsection.final) {
+                    this.onArticleCropSelected(subsection);
+                }
+                else
+                    this.section = subsection;
+            },
+            onSectionDivRemove: function (event) {
+                this.splice('section.sections', event.model.index, 1);
+                this.onSaveDebouncer(this.section);
+            },
+            getNavNextDisabledState: function (page) {
+                if (_.isUndefined(page.page_number)) return;
+                return page.page_number == this.menu.pages.length - 1;
+            },
+            getNavBeforeDisabledState: function (page) {
+                if (_.isUndefined(page.page_number)) return;
+                if (!page.page_number)
+                    this.$.before.icon = 'chrome-reader-mode';
+                else
+                    this.$.before.icon = 'image:navigate-before';
+
+                return false; // im trying out best way for user to navigate. if icon-change is decided upon, disabled$= is redundant
+            },
+            onNavigateBefore: function (event) {
+                if (_.isUndefined(this.page.page_number)) return;
+                if (!this.page.page_number)
+                    page('/menus');
+                else
+                    this.page = this.menu.pages[this.page.page_number - 1];
+            },
+            onNavigateNext: function (event) {
+                if (_.isUndefined(this.page.page_number)) return;
+                this.page = this.menu.pages[this.page.page_number + 1];
+            }
+        });
+    </script>
+</dom-module>

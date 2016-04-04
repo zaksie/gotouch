@@ -1,0 +1,233 @@
+@import url(https://fonts.googleapis.com/css?family=Fjalla+One);
+
+html{
+ height:100vh;
+ min-height:100vh;
+ }
+body{
+ min-height:100vh;
+ }
+.invisible {
+    visibility: hidden;
+}
+
+.full {
+    background-repeat: no-repeat;
+    background-position: center center;
+    background-attachment: fixed;
+    background-size: cover;
+}
+
+.regularBG {
+    background-color: rgb(158, 82, 49);
+    background-image: -webkit-gradient(radial, 50% 50%, 0, 50% 50%, 500, from(rgb(0,0,0), rgb(158, 82, 49)));
+    background-image: -webkit-radial-gradient(rgb(0,0,0), rgb(158, 82, 49));
+    background-image: -moz-radial-gradient(rgb(0,0,0), rgb(158, 82, 49));
+    background-image: radial-gradient(rgb(0,0,0), rgb(158, 82, 49));
+}
+
+.goTouchBG {
+    background-image: linear-gradient(rgba(0, 0, 0, 0.6), rgba(0, 0, 0, 0.6)), url('/public/images/coffee.jpg');
+}
+
+.appsBG {
+    background-image: linear-gradient(rgba(0, 0, 0, 0.6), rgba(0, 0, 0, 0.6)), url('/public/images/work.jpeg');
+}
+
+.vertical-center {
+    min-height: 80%; /* Fallback for browsers do NOT support vh unit */
+    min-height: 80vh; /* These two lines are counted as one :-)       */
+    display: flex;
+    align-items: center;
+}
+
+.horizontal-center {
+    display: flex;
+    justify-content: center;
+    -ms-align-content: center;
+    -webkit-align-content: center;
+    align-content: center;
+    -ms-flex-flow: row nowrap;
+    -webkit-flex-flow: row nowrap;
+    flex-flow: row nowrap;
+}
+
+
+.e {
+    width: 100%;
+    height: 100px;
+    -webkit-animation: load 3s infinite;
+    animation: load 3s infinite;
+    -moz-animation: load 3s infinite;
+    -o-animation: load 3s infinite;
+    display: none;
+}
+
+.appsImages {
+    display: block;
+    width: 50%;
+    height: auto;
+}
+
+.leftText {
+    text-align: left;
+}
+
+.whiteText {
+    color: white;
+}
+
+.blueBoldText {
+    color: cornflowerblue;
+    font-weight: bold;
+}
+
+
+
+figure {
+    margin: 0;
+    display: inline;
+}
+
+img.border:hover {
+    border: 2px solid cornflowerblue;
+}
+
+.small-margin {
+    padding: 0 !important;
+    margin: 1.5px 1.5px !important;
+}
+
+.no-margins {
+    padding: 0 !important;
+    margin: 0 !important;
+}
+
+.extra-big-font {
+    font-size: xx-large;
+}
+
+span.coffee-color-bg {
+    background-color: #6F4E37;
+    color: white;
+}
+
+.opaque {
+    opacity: 0.8;
+}
+
+#mainWindow {
+    max-width: 750px;
+}
+
+.custom-mi {
+    cursor: pointer;
+    font-size: 20px;
+    padding-top: 3px;
+}
+
+    .custom-mi:hover {
+        color: dodgerblue;
+    }
+
+.flex-container, .expanded-state {
+    padding: 0;
+    margin: 0;
+    display: -webkit-box;
+    display: -moz-box;
+    display: -ms-flexbox;
+    display: flex;
+    -webkit-flex-flow: row wrap;
+    -ms-flex-flow: row wrap;
+    flex-flow: row wrap;
+    justify-content: flex-start;
+}
+
+.flex-item {
+}
+
+.flex-container.top-to-bottom {
+    -ms-flex-flow: column wrap-reverse;
+    -webkit-flex-flow: column wrap-reverse;
+    flex-flow: column wrap-reverse;
+    justify-content: center;
+    -ms-align-content: center;
+    -webkit-align-content: center;
+    align-content: center;
+}
+
+
+.flex-container.right-to-left {
+    -ms-flex-flow: row-reverse nowrap;
+    -webkit-flex-flow: row-reverse nowrap;
+    flex-flow: row-reverse nowrap;
+    justify-content: flex-start;
+    text-align: right;
+}
+
+.flex-container.v-center {
+    align-items: center;
+}
+
+.flex-container.space-around, .expanded-state.space-around {
+    -ms-flex-flow: row wrap;
+    -webkit-flex-flow: row wrap;
+    flex-flow: row wrap;
+    justify-content: space-around;
+}
+
+.collapsed-state {
+    display: none;
+}
+
+.cafe-list-item {
+    background-image: url('/public/images/pane.jpg');
+    color: black;
+    width: 100%;
+    opacity: 0.7;
+    box-shadow: 2px 2px 1px #888888;
+    left: 0;
+    right: 0;
+    margin-top: 10px;
+    cursor: pointer;
+}
+
+.at-the-bottom {
+    position: absolute;
+    display:inline-block;
+    max-width: 300px;
+    text-align:center;
+    bottom: 10%;
+    left: 0;
+    right: 0;
+    margin: 0 auto;
+}
+
+.no-padding {
+    padding: 0;
+}
+
+.logo-pic {
+    position: absolute;
+    bottom: 0;
+    top: 0;
+    left: 0;
+    margin:auto;
+    width: auto;
+    height: 30px;
+}
+
+.place-mini-card{
+    color: black;
+
+}
+
+img .fill {
+    display:flex;
+    justify-content:center;
+    align-items:center;
+    overflow:hidden;
+    flex-shrink:0;
+    min-width:100%;
+    min-height:100%;
+}

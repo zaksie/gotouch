@@ -1,0 +1,172 @@
+﻿
+<dom-module id="pos-view">
+
+    <template>
+        <link rel="import" type="css" href="../../web.common/styles/shared-by-elements.css">
+
+        <style>
+            @media (min-width: 601px) {
+                .padded {
+                    padding: 48px 62px;
+                }
+            }
+
+            :host {
+                display: block;
+            }
+
+            .fixed {
+                position: relative;
+                height: 100%;
+                width: 100%;
+            }
+        </style>
+        <neon-animated-pages class="fixed" id="pages" selected="[[selection]]"
+                             entry-animation="{{entryAnimation}}" exit-animation="{{exitAnimation}}" on-iron-deselect="onDeselected">
+            <error-card class="padded" id="error-card-id"></error-card>
+            <open-orders-view id="open-orders-view-id" businesses="{{businesses}}" business="{{business}}"></open-orders-view>
+            <order-history-view id="order-history-view-id"></order-history-view>
+            <business-view id="business-view-id" businesses="{{businesses}}"></business-view>
+            <menu-manager-view businesses="{{businesses}}" business="{{business}}"></menu-manager-view>
+            <div id="account-id" class="padded" hidden$="{{!isLoggedIn}}"><account-logout></account-logout></div>
+            <pay-register></pay-register>
+            <floor-map business="{{business}}"></floor-map>
+            <photo-gallery business="{{business}}"></photo-gallery>
+            <review-section business="{{business}}"></review-section>
+            <social-media-facebook></social-media-facebook>
+            <inventory-section business="{{business}}"></inventory-section>
+        </neon-animated-pages>
+    </template>
+    <script>
+        var i = 0;
+        const ERROR_PAGE = i++;
+        const OPEN_ORDERS_PAGE = i++;
+        const ORDER_HISTORY_PAGE = i++;
+        const BUSINESS_VIEW_PAGE = i++;
+        const MENU_MANAGER_PAGE = i++;
+        const ACCOUNT_PAGE = i++;
+        const PAY_REGISTER_PAGE = i++;
+        const FLOOR_MAP_PAGE = i++;
+        const PHOTO_GALLERY_PAGE = i++;
+        const REVIEWS_PAGE = i++;
+        const SOCIAL_MEDIA_PAGE = i++;
+        const INVENTORY_PAGE = i++;
+        
+        const ENTRY = "scale-up-animation";
+        const EXIT = "scale-down-animation";
+        var wasBackClick = false;
+        Polymer({
+            is: "pos-view",
+            properties: {
+                businesses: {
+                    type: Array,
+                    notify: true,
+                    reflectToAttribute: true,
+                    value: function () { return []; }
+                },
+                business: {
+                    type: Object,
+                    notify: true,
+                    reflectToAttribute: true,
+                },
+                selection: {
+                    type: Number,
+                    notify: true,
+                    value: function () { return 0; },
+                },
+                entryAnimation: {
+                    type: String,
+                    notify: true,
+                    value: function () { return ENTRY; }
+                },
+                exitAnimation: {
+                    type: String,
+                    notify: true,
+                    value: function () { return EXIT; }
+                },
+                backHistory: {
+                    type: Array,
+                    notify: true,
+                    value: function () { return []; },
+                },
+                isLoggedIn: {
+                    type: Boolean,
+                    notify: true,
+                    value: function () { return false; }
+                }
+            },
+            observers: [
+                'isBackEnabled(backHistory.length)'
+            ],
+            ready: function () {
+                PubSub.subscribe('neonpages.OpenOrders', this.onSelectionChange.bind(this, OPEN_ORDERS_PAGE));
+                PubSub.subscribe('neonpages.OrderHistory', this.onSelectionChange.bind(this, ORDER_HISTORY_PAGE));
+                PubSub.subscribe('neonpages.BusinessView', this.onSelectionChange.bind(this, BUSINESS_VIEW_PAGE));
+                PubSub.subscribe('neonpages.Account', this.onSelectionChange.bind(this, ACCOUNT_PAGE));
+                PubSub.subscribe('neonpages.Menus', this.onSelectionChange.bind(this, MENU_MANAGER_PAGE));
+                PubSub.subscribe('neonpages.Register', this.onSelectionChange.bind(this, PAY_REGISTER_PAGE));
+                PubSub.subscribe('neonpages.Floormap', this.onSelectionChange.bind(this, FLOOR_MAP_PAGE));
+                PubSub.subscribe('neonpages.PhotoGallery', this.onSelectionChange.bind(this, PHOTO_GALLERY_PAGE));
+                PubSub.subscribe('neonpages.Reviews', this.onSelectionChange.bind(this, REVIEWS_PAGE));
+                PubSub.subscribe('neonpages.SocialMedia', this.onSelectionChange.bind(this, SOCIAL_MEDIA_PAGE));
+                PubSub.subscribe('neonpages.Inventory', this.onSelectionChange.bind(this, INVENTORY_PAGE));
+                
+                PubSub.subscribe('User.logged', this.onSessionChange.bind(this));
+            },
+            attached: function () {
+                this.async(function () { window.dispatchEvent(new Event('PolymerElementsLoaded')) }.bind(this));
+                this.async(function () { this.onSessionChange(); }.bind(this));
+            },
+            onSessionChange: function (msg, value) {
+                this.isLoggedIn = CommonModule.modules.user.current.is();
+            },
+            onSearchEnded: function () {
+                if (this.$['places-id'].places.length < 1) {
+                    this.$['error-card-id'].title = 'No nearby places found';
+                    this.$['error-card-id'].message = 'Try extending your search radius.';
+                    this.selection = ERROR_PAGE;
+                }
+            },
+            onSelectionChange: function (selection, placeid) {
+                //TODO: ignoring placeid for now... since im using attribute business which points to the currently selected business
+                // I should tho have a mechanism preferrably in routing.html that sets the current business if accessed by link with a placeid in it
+                this.selection = selection;
+                if (this.$.pages.selectedItem.update)
+                    this.$.pages.selectedItem.update();
+            },
+            isBackEnabled: function (value) {
+                //this.$.backButton.hidden = !value;
+            },
+            onBackClick: function (event) {
+                var customBack = this.$.pages.selectedItem.onBackClick;
+                if (customBack)
+                    return (customBack.bind(this.$.pages.selectedItem.this))();
+
+                this._onBackClick(event);
+            },
+            _onBackClick: function (event) {
+                if (!this.backHistory.length) return;
+                this.entryAnimation = BACK_ENTRY;
+                this.exitAnimation = BACK_EXIT;
+
+                wasBackClick = true;
+                this.selection = this.pop('backHistory');
+
+                setTimeout(function () {
+                    this.entryAnimation = ENTRY;
+                    this.exitAnimation = EXIT;
+                }.bind(this), 500);
+            },
+            onDeselected: function (event, moreinfo) {
+                var prev = event.target._prevSelected;
+                if (!prev) return;
+                var prevItem = event.target.items[prev];
+                if (!wasBackClick)
+                    this.push('backHistory', prev);
+                wasBackClick = false;
+            }
+        });
+
+
+    </script>
+</dom-module>

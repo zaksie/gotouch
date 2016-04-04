@@ -1,0 +1,44 @@
+﻿            .image {
+                min-width: 200px;
+                max-width: 300px;
+                width: 200px;
+                position: relative;
+                -ms-flex: 1 1 auto;
+                -webkit-flex: 1 1 auto;
+                flex: 1 1 auto;
+            }
+            
+            paper-material.image {
+                margin: 10px 5px;
+                display: inline;
+                min-width: 0;
+                border-radius: 10px;
+                max-width: 230px;
+            }
+
+                paper-material.image:hover {
+                    box-shadow: 0 0 10px blue;
+                }
+
+            .chip {
+                font-size: xx-small;
+                height: 40px;
+                width: auto;
+                margin: 1px 0 !important;
+                text-align: right;
+                border-radius: 10px;
+                font-weight: bolder;
+                min-width: 80px;
+                -webkit-flex: 1 1 auto;
+                -ms-flex: 1 1 auto;
+                flex: 1 1 auto;
+            }
+
+            
+            paper-fab{
+                color:white;
+                background:cornflowerblue;
+            }
+            .badge{
+                cursor:pointer;
+            }

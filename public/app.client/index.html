@@ -1,0 +1,69 @@
+﻿<!doctype html>
+<html lang="en" itemscope itemtype="http://schema.org/Article">
+<head>
+    <meta charset="utf-8">
+    <meta name="description" content="">
+    <meta name="viewport" content="width=device-width, initial-scale=1,minimum-scale=1.0,maximum-scale=1.0, user-scalable=no">
+    <meta name="generator" content="yummlet" />
+    <title>yummlet</title>
+    <meta name="theme-color" content="#2E3AA1">
+    <link rel="manifest" href="/manifest.json">
+    <meta name="msapplication-TileColor" content="#3372DF">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="application-name" content="PSK">
+    <link rel="icon" sizes="192x192" href="/public/images/touch/chrome-touch-icon-192x192.png">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black">
+    <meta name="apple-mobile-web-app-title" content="yummlet">
+    <link rel="apple-touch-icon" href="/public/images/touch/apple-touch-icon.png">
+    <meta name="msapplication-TileImage" content="/public/images/touch/ms-touch-icon-144x144-precomposed.png">
+    <script src="/bower_components/please-wait/build/please-wait.min.js"></script>
+    <link href="/bower_components/please-wait/build/please-wait.css" rel="stylesheet">
+    <link href="/bower_components/SpinKit/css/spinkit.css" rel="stylesheet">
+    <link href="/bower_components/SpinKit/css/spinners/4-wandering-cubes.css" rel="stylesheet">
+    <script src="/public/app.common/loading-page.js"></script>
+</head>
+<body>
+    <div id="pageloader" class="inner">
+    </div>
+    <script>
+        showLoadingPage({
+            color: '#907E73',
+            events: ['PolymerElementsLoaded'/*, 'GoogleMapsReady'*/],
+            text: 'DINE & WINE IN A BREEZE'
+        });
+    </script>
+
+    <!-- SCRIPTS -->
+    <script src="/bower_components/PubSubJS/src/pubsub.js"></script>
+    <script src="/node_modules/socket.io-client/socket.io.js"></script>
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/2.1.4/jquery.min.js"></script>
+    <script src="/public/js/lodash.min.js"></script>
+    <script src="/bower_components/webrtc-adapter/adapter.js"></script>
+    <script src="/bower_components/webcomponentsjs/webcomponents.min.js"></script>
+    <script src="/bower_components/system.js/dist/system.js"></script>
+    <script>
+        var CommonModule = {};
+
+        System.config({
+        });
+        System.defaultJSExtensions = true;
+        System.import('/public/app.client/modules/client-controller').then(function (loaded) {
+            CommonModule = loaded.CommonModule;
+            link("/public/app.common/polymer-components.html");
+            link("/public/app.client/client-components.html");
+        });
+
+        function link(href) {
+            var link = document.createElement('link');
+            link.rel = 'import';
+            link.href = href;
+            document.head.appendChild(link);
+        }
+    </script>
+    <!-- END SCRIPTS -->
+    <div class="fullbleed layout vertical">
+        <yummlet-client></yummlet-client>
+    </div>
+</body>
+</html>

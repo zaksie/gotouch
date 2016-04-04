@@ -1,0 +1,35 @@
+﻿
+<dom-module id="order-history-view">
+
+    <template>
+        <link rel="import" type="css" href="../../web.common/styles/shared-by-elements.css">
+
+        <style>
+        </style>
+        <div class="fullbleed layout vertical center">
+            ORDER HISTORY
+        </div>
+    </template>
+    <script>
+        Polymer({
+            is: "order-history-view",
+            properties: {
+                profilePicture: {
+                    type: String,
+                    notify: true,
+                    value: function () { return "";}
+                },
+                profile: {
+                    type: Object,
+                    notify: true,
+                    value: function () { return {}; }
+                }
+            },
+            ready: function () {
+            },
+            attached: function () {
+            }
+        });
+
+    </script>
+</dom-module>

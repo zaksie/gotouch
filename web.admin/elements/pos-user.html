@@ -1,0 +1,322 @@
+﻿<dom-module id="pos-user">
+    <template>
+        <link rel="import" type="css" href="../../web.common/styles/shared-by-elements.css">
+        <link rel="import" type="css" href="../../web.common/styles/business-grid.css">
+        <style>
+            :host {
+                width:100%;
+                max-width: 800px;
+            }
+
+            table {
+                width: 100%;
+            }
+
+            .marked-item {
+                color: blue;
+            }
+
+            .list-container {
+                max-height: 300px;
+                overflow: auto;
+            }
+
+            .user-entry {
+                display: block;
+                padding: 10px;
+            }
+
+            .view80 {
+                width: 80%;
+                font-size: small;
+                left: 0;
+                right: 0;
+                margin: auto;
+            }
+
+            paper-button {
+                display: block;
+            }
+        </style>
+        <paper-toast id="toast1"></paper-toast>
+        <paper-material class="user-entry">
+            <div class="fjalla-caption">{{user.name}}</div>
+            <form is="iron-form" id="upsertForm" method="post" action="/admins/access/upsert/user/pos"
+                  with-credentials
+                  on-iron-form-response="onResponse"
+                  on-iron-form-error="onError"
+                  on-iron-form-submit="onSubmitted"
+                  class="hidden-animation">
+                <input type="hidden" required name="id" value="{{user.id}}" />
+                <paper-input id="nameInput" name="name" required label="Name" value="{{user.name}}"></paper-input>
+                <paper-input name="email" type="email" label="Email" value="{{user.email}}"></paper-input>
+                <paper-input name="phone_number" label="Phone #" required value="{{user.phone_number}}"></paper-input>
+                <paper-textarea max-rows="5" name="_internal_comment" label="Comments (private)" value="{{user._internal_comment}}"></paper-textarea>
+                <input type="hidden" required name="businesses" value="{{businessesStringified}}" />
+                <input type="hidden" name="code" value="{{user.code}}" />
+            </form>
+
+            <div class="grid">
+                <template is="dom-repeat" items="{{businesses}}" as="business">
+                    <business-grid-item hide-actions small fullname business="{{business}}"
+                                        on-remove-click="removeItem"></business-grid-item>
+                </template>
+            </div>
+                <div class="layout horizontal center center-justified">
+                    <span class="flex"></span>
+                    <iron-icon icon="search" style="color:blue;"></iron-icon>
+                    <input id="searchInput" type="search" on-blur="onSearchBlur"
+                           style="display:block; height:40px;"
+                           class="view80"
+                           on-input="onSearchInput" />
+                    <span class="flex"></span>
+                </div>
+                <div style="position:absolute; z-index:2; width:100%; background:lightblue">
+                    <template is="dom-repeat" items="{{suggestions}}" as="suggestion">
+                        <paper-item class="suggestion" on-click="onSuggestionSelect">{{suggestion.fullname}}</paper-item>
+                    </template>
+                </div>
+            <paper-material id="allBusinessesDiv" class="list-container view80" on-scroll="onBusinessScroll">
+                <paper-listbox id="businessListBox" multi selected-class="marked-item"
+                               on-iron-select="onActiveBusinessesChange"
+                               on-iron-deselect="onActiveBusinessesChange">
+                    <template is="dom-repeat" items="{{allBusinesses}}" as="business">
+                        <paper-item style$="{{getListItemStyle(index)}}">
+                            <span>{{business.fullname}}</span>
+                        </paper-item>
+                    </template>
+                </paper-listbox>
+            </paper-material>
+            <paper-button class="blue-300" raised on-click="onSubmit">Submit</paper-button>
+        </paper-material>
+        <paper-material>
+            <form is="iron-form" id="codeForm" method="post" action="/admins/access/send/sms-code/user/pos"
+                  with-credentials
+                  on-iron-form-response="onCodeResponse"
+                  on-iron-form-error="onCodeError"
+                  on-iron-form-submit="onSubmitted"
+                  class="hidden-animation">
+                <input type="hidden" required name="name" value="{{user.name}}">
+                <div class="fullbleed layout horizontal center center-justified">
+                    <span class="flex"></span>
+                    <paper-icon-button icon="visibility" on-mousedown="onShowCode" on-mouseup="onShowCode"></paper-icon-button>
+                    <input id="regcode" type="password" readonly required class="view80" name="code"
+                           style="font-size:medium; height: 40px; text-align:center"
+                           placeholder="NO EXISTING CODE" value="{{user.code}}" />
+                    <span class="flex"></span>
+                </div>
+                <paper-button class="yellow-300" raised on-click="onSendSMSCode">SEND</paper-button>
+            </form>
+        </paper-material>
+        <div class="layout horizontal around-justified center">
+            <paper-button class="green-300" style="width:65%; " raised on-click="onClose">
+                Close
+            </paper-button>
+            <paper-fab class="red-300" icon="delete" on-click="onDelete" alt="Delete"></paper-fab>
+            <paper-fab class="gray-700" icon="av:not-interested" toggles on-click="onDeactivate" alt="Deactivate"></paper-fab>
+        </div>
+        <paper-dialog id='deleteDlg' on-iron-overlay-closed="onDialogClosed">
+            <p>Confirm <strong>delete</strong></p>
+            <div class="buttons">
+                <paper-button dialog-dismiss>Cancel</paper-button>
+                <paper-button dialog-confirm>Delete</paper-button>
+            </div>
+        </paper-dialog>
+    </template>
+    <script>
+        const ALL_BUSINESSES_BUFFER_SIZE = 100;
+        var businessesLoadedFromServer = false;
+        const INITIAL_DB_CONFIG = { start: 0, end: ALL_BUSINESSES_BUFFER_SIZE }
+        const MAX_SUGGESTIONS = 5;
+        var businessDB;
+
+        Polymer({
+            is: "pos-user",
+            properties: {
+                user: {
+                    type: Object,
+                    notify: true,
+                    observer: 'updateUserDetails'
+                },
+                businesses: {
+                    type: Array,
+                    notify: true,
+                    reflectToAttribute: true,
+                    value: function () { return []; },
+                },
+                businessesStringified: {
+                    type: String,
+                    notify: true,
+                },
+                allBusinesses: {
+                    type: Array,
+                    notify: true,
+                    value: function () { return []; },
+                },
+                suggestions: {
+                    type: Array,
+                    notify: true
+                }
+            },
+            observers: [
+                'businessesToString(businesses.splices)'
+            ],
+            ready: function () {
+            },
+            attached: function () {
+                PubSub.subscribe('Business.ready', function () {
+                    businessesLoadedFromServer = true;
+                    this.initAllBusinesses()
+                }.bind(this));
+            },
+            initAllBusinesses:function(){
+                this.splice('allBusinesses', 0);
+                this.businessDB = _.clone(INITIAL_DB_CONFIG);
+            },
+            updateUserDetails: function () {
+                this.$.nameInput.focus();
+                this.splice('businesses', 0, this.businesses.length);
+                _.forEach(this.user.placeids, function (placeid) {
+                    var business = CommonModule.modules.business.get(placeid);
+                    if (business)
+                        this.push('businesses', business);
+                }.bind(this));
+            },
+            load: function (user) {
+                if (!businessesLoadedFromServer)
+                    return setTimeout(function (user) { this.load(user); }.bind(this), 1000, user);
+                if (user)
+                    this.user = user;
+                if (!this.allBusinesses.length) {
+                    var slice = _.slice(CommonModule.modules.business.getAll(), this.businessDB.start, this.businessDB.end);
+                    this.splice.apply(this, ['allBusinesses', 0, this.allBusinesses.length].concat(slice));
+                }
+                else {
+                    var dy = this.$.allBusinessesDiv.scrollTop / 50;
+                    var unit = ALL_BUSINESSES_BUFFER_SIZE / 4;
+                    if (dy < unit) return;
+
+                    if (this.businessDB.end + unit > CommonModule.modules.business.getAll().length) return;
+                    this.businessDB.start += unit;
+                    this.businessDB.end = Math.min(this.businessDB.end + unit, CommonModule.modules.business.getAll().length);
+                    var slice = _.slice(CommonModule.modules.business.getAll(), this.businessDB.start + unit * 3, this.businessDB.end);
+
+                    //this.splice('allBusinesses', 0, unit);
+                    this.splice.apply(this, ['allBusinesses', unit * 4, 0].concat(slice));
+                }
+            },
+            locked: false,
+            onSearchInput: function (event) {
+                if (this.locked) return;
+                this.locked = true;
+                setTimeout(function (event) {
+                    var results = _.filter(CommonModule.modules.business.getAll(), function (b) {
+                        return _.includes(b.fullname, event.srcElement.value);
+                    });
+                    results.length = Math.min(results.length, MAX_SUGGESTIONS);
+                    this.suggestions = results;
+                    this.locked = false;
+                }.bind(this), 200, event);
+            },
+            onSearchBlur: function (event) {
+                if (event.relatedTarget && _.includes(event.relatedTarget.className, 'suggestion')) return;
+                this.suggestions = [];
+            },
+            onBusinessScroll: function (event, data) {
+                this.load();
+            },
+            onSubmit: function () {
+                this.$.upsertForm.submit();
+            },
+            onSendSMSCode: function () {
+                this.$.codeForm.submit();
+            },
+            onSubmitted: function () {
+                this.disableButtons(true);
+            },
+            onEndRequest: function (msg) {
+                this.disableButtons(false);
+                this.$.toast1.text = msg;
+                this.$.toast1.show();
+            },
+            onResponse: function (event, data) {
+                this.onEndRequest('200 success');
+                this.set('user.code', data.response.code);
+                this.set('user.id', data.response.id);
+            },
+            onCodeResponse: function (event, data) {
+                this.onEndRequest('200 success');
+            },
+            onError: function (event) {
+                this.onEndRequest(event.detail.error);
+            },
+            onCodeError: function (event) {
+                this.onEndRequest(event.detail.error);
+            },
+            disableButtons: function (disable) {
+                var buttons = this.querySelectorAll('paper-button');
+                _.forEach(buttons, function (button) {
+                    button.disabled = disable;
+                });
+            },
+            onSuggestionSelect: function (event, data) {
+                this.onActiveBusinessesChange(event, data, event.model.suggestion);
+                this.suggestions = [];
+            },
+            onActiveBusinessesChange: function (event, data, business) {
+                business = business || data.item._templateInstance.business;
+                var index = _.findIndex(this.businesses, function (b) { return b.placeid == business.placeid; });
+                if (index < 0)
+                    this.push('businesses', business);
+                else
+                    this.removeItemByIndex(index);
+            },
+            removeItem: function (event, business) {
+                var selected = this.$.businessListBox.selectedValues;
+                this.$.businessListBox.selectedValues = _.filter(selected, function (s) {
+                    return this.$.businessListBox.items[s]._templateInstance.business.placeid != business.placeid;
+                }.bind(this));
+                var index = _.findIndex(this.businesses, function (b) { return b.placeid == business.placeid; });
+                this.removeItemByIndex(index);
+            },
+            removeItemByIndex: function (index) {
+                this.splice('businesses', index, 1);
+            },
+            getListItemStyle: function (index) {
+                if (index % 2)
+                    return 'background: white';
+                return 'background: whitesmoke';
+            },
+            businessesToString: function () {
+                this.businessesStringified = JSON.stringify(this.businesses);
+            },
+            onShowCode: function (event) {
+                console.log('mouse: ' + event.type)
+                if (event.type == 'mousedown')
+                    this.$.regcode.type = 'text';
+                else
+                    this.$.regcode.type = 'password';
+            },
+            onClose: function (event) {
+                this.fire('close');
+                this.$.allBusinessesDiv.scrollTop = 0;
+            },
+            onDialogClosed: function (event) {
+                if (event.detail.confirmed) {
+                    CommonModule.posusers.deletePOSUser(this.user);
+                    this.onClose();
+                }
+            },
+            onDelete: function () {
+                this.$.deleteDlg.open();
+            },
+            onDeactivate: function (event) {
+                var active = event.currentTarget.active;
+                CommonModule.modules.user_manager.setActivationState(this.user, active);
+                event.currentTarget.style.color = active ? 'blue' : '';
+                this.$.toast1.text = active ? 'User has been deactivated' : 'User is now active';
+                this.$.toast1.show();
+            },
+        });
+    </script>
+</dom-module>

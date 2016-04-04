@@ -1,0 +1,1 @@
+vulcanize --inline-css --inline-scripts c:\projects\go_touch\web.client\elements\myElements.html > c:\projects\go_touch\public\app.client\client-components.html

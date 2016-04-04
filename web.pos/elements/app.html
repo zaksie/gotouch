@@ -1,0 +1,374 @@
+﻿<dom-module id="yummlet-pos">
+    <template>
+        <link rel="import" type="css" href="../styles/pos-styles.css">
+        <link rel="import" type="css" href="../styles/navigation-controls.css">
+        <style>
+            .blurred {
+                -webkit-filter: blur(7px);
+                -moz-filter: blur(7px);
+                -o-filter: blur(7px);
+                -ms-filter: blur(7px);
+                filter: blur(7px);
+            }
+
+            paper-toolbar {
+                background-image: linear-gradient(rgba(100, 149, 237,0.3), rgba(100, 149, 237,0.3)), url("/public/images/coffee.jpg");
+            }
+
+            paper-checkbox {
+                z-index: 2;
+            }
+
+            .menu-heading {
+                margin-left: 7px;
+                font-size: x-small;
+                color: lightgray;
+                text-transform: uppercase;
+                font-weight: bold;
+            }
+            div .menu-content:nth-child(even){
+                background: #fff8ff;
+            }
+        </style>
+        <paper-toast id="toast2"></paper-toast>
+        <account-manager backdrop="#backdrop"></account-manager>
+        <div id="backdrop">
+            <paper-material id="businessList" hidden class="business-list layout vertical">
+                <template is="dom-repeat" items="{{businesses}}" as="business_from_list">
+                    <p class="business-for-selection" style$="{{getBusinessListItemStyle(business_from_list, business)}}" on-click="onBusinessSelect">{{business_from_list.fullname}}</p>
+                </template>
+            </paper-material>
+            <paper-drawer-panel id="paperDrawerPanel" drawer-width="200px" transition="true">
+                <paper-header-panel drawer>
+                    <paper-toolbar id="drawerToolbar" shadow>
+                        <div class="title-bar-fonting">
+                            <span>yummlet</span> <span class="yummlet-pos-text">TERMINAL</span>
+                            <div class="paper-font-subhead" style="font-size:xx-small">EASY TO RUN A PLACE.</div>
+                        </div>
+                    </paper-toolbar>
+                    <!-- Menus go here -->
+                    <paper-menu class="list" attr-for-selected="data-route" selected="{{route}}">
+                        <paper-submenu>
+                            <paper-button class="menu-trigger nobutton" data-route="/businesses" data-leave-drawer-open on-click="onRouteClick">
+                                <iron-icon icon="communication:business"></iron-icon>
+                                <span>My businesses</span>
+                            </paper-button>
+                            <paper-menu class="menu-content">
+                                <template is="dom-repeat" items="{{businesses}}" as="business">
+                                    <paper-icon-item on-click="onRouteClick" style="text-align:right">
+                                        <span style="text-transform: capitalize; padding:10px">{{business.fullname}}</span>
+                                        <template is="dom-if" if="{{business.onLocation}}">
+                                            <iron-icon icon="maps:place" item-icon></iron-icon>
+                                        </template>
+                                    </paper-icon-item>
+                                </template>
+                            </paper-menu>
+                        </paper-submenu>
+                        <template is="dom-repeat" items="{{menuItems}}">
+                            <template is="dom-if" if={{item.sectionHeader}}>
+                                <div class="separator"></div>
+                                <p class="menu-heading">{{item.sectionHeader}}</p>
+                            </template>
+                            <paper-button class="nobutton" data-route="{{item.route}}" on-click="onRouteClick">
+                                <paper-icon-item>
+                                    <iron-icon id="{{item.id}}" icon="{{item.icon}}" item-icon></iron-icon>
+                                    <paper-badge id="{{item.badgeid}}" for="{{item.id}}" label="{{item.badgeLabel}}" hidden$="{{!item.badgeLabel}}"></paper-badge>
+                                    <span>{{item.label}}</span>
+                                </paper-icon-item>
+                            </paper-button>
+                        </template>
+                    </paper-menu>
+                </paper-header-panel>
+                <paper-header-panel main shadow>
+                    <paper-toolbar id="mainToolbar">
+                        <paper-icon-button id="paperToggle" icon="menu" paper-drawer-toggle></paper-icon-button>
+                        <span class="flex"></span>
+                        <paper-icon-button icon="communication:business" on-click="onBusinessesClick" id="businessListButton"></paper-icon-button>
+                        <paper-icon-button icon="account-circle" on-click="onRouteClick" data-route="/account" id="accountButton"></paper-icon-button>
+                        <paper-icon-button icon="refresh" on-click="onRefresh"></paper-icon-button>
+                    </paper-toolbar>
+                    <div class="content">
+                        <pos-view businesses="{{businesses}}" business="{{business}}"></pos-view>
+                    </div>
+                </paper-header-panel>
+            </paper-drawer-panel>
+            <!-- Uncomment next block to enable Service Worker support (1/2) -->
+            <!--
+        <paper-toast id="caching-complete"
+                     duration="6000"
+                     text="Caching complete! This app will work offline.">
+        </paper-toast>
+
+        <platinum-sw-register auto-register
+                              clients-claim
+                              skip-waiting
+                              on-service-worker-installed="displayInstalledToast">
+          <platinum-sw-cache default-cache-strategy="fastest"
+                             cache-config-file="cache-config.json">
+          </platinum-sw-cache>
+        </platinum-sw-register>
+        -->
+        </div>
+    </template>
+    <script>
+        Polymer({
+            is: "yummlet-pos",
+            properties: {
+                route: {
+                    type: String,
+                    notify: true,
+                    value: function () { return '/open-orders'; }
+                },
+                menuItems: {
+                    type: Array,
+                    notify: true,
+                },
+                businesses: {
+                    type: Array,
+                    notify: true,
+                    reflectToAttribute: true,
+                    value: function () { return []; }
+                }
+            },
+            created: function () {
+                window.writeToScreen = function (msg) {
+                    this.async(function () {
+                        this.writeToScreen(msg);
+                    }.bind(this));
+                }.bind(this);
+                PubSub.subscribe('app.scrollToTop', this.async(function () {
+                    this.scrollPageToTop();
+                }.bind(this)));
+            },
+            ready: function () {
+            },
+            attached: function () {
+                app = this;
+                this.async(function () {
+                    this.menuItems = this.populateMenu();
+                }.bind(this));
+                this.onSessionChange();
+                PubSub.subscribe('User.logged', this.onSessionChange.bind(this));
+
+                //initial businesses update:
+                PubSub.subscribe('Business.received', this.updateBusinesses.bind(this));
+                PubSub.subscribe('Menu.received', this.updateMenu.bind(this));
+
+                this.onTabsChange();
+                PubSub.subscribe('Tab', this.onTabsChange.bind(this));
+                PubSub.subscribe('Locals', this.onTabsChange.bind(this));
+                PubSub.subscribe('Business.received', this.onTabsChange.bind(this));
+                PubSub.subscribe('User.logged.in', this.onLoginSuccess.bind(this));
+                $('html').click(function (event) { // this is so that menus are closed automatically on click elsewhere
+                    this.onClickEvent(event);
+                }.bind(this));
+                this.businesses = CommonModule.modules.business.getAll();
+
+                PubSub.publish('App.ready');
+            },
+            onLoginSuccess: function () {
+                var name = CommonModule.modules.user.current.profile().name;
+                name = name ? ', ' + name : '';
+                window.writeToScreen('Welcome to yummlet POS' + name);
+            },
+            writeToScreen: function (msg) {
+                if (!_.isString(msg)) return;
+                this.$.toast2.duration = 3000 + msg.length * 50;
+                this.$.toast2.text = msg;
+                this.$.toast2.show();
+            },
+            onTabsChange: function () {
+                var elem = this.querySelector('#openorders-badge');
+                if (!elem)
+                    return setTimeout(this.onTabsChange.bind(this), 1000);
+                elem.label = CommonModule.modules.tab.getCount();
+            },
+            onSessionChange: function () {
+                var color = CommonModule.modules.user.current.is() ? 'green' : 'white';
+                this.$.accountButton.style.color = color;
+            },
+            updateBusinesses: function (msg, business) {
+                if (!this.business || !this.business.placeid || business.locals.selected)
+                    this.business = business;
+                var index = _.findIndex(this.businesses, function (b) { return b.placeid == business.placeid; });
+                if (index < 0)
+                    this.push('businesses', business);
+                else
+                    this.splice('businesses', index, 1, business);
+            },
+            updateMenu: function (msg, menu) {
+                var businessIndex = _.findIndex(this.businesses, function (b) { return b.placeid == menu.placeid; });
+                if (businessIndex < 0) return;
+                var menuIndex = _.findIndex(this.businesses[businessIndex].menus, function (m) { return m.name == menu.name; });
+                var path = 'businesses.' + businessIndex + '.menus';
+                console.log('attempting to alter ' + path);
+                if (menuIndex > -1)
+                    return this.splice(path, menuIndex, 1, menu);
+                return this.push(path, menu);
+            },
+            displayInstalledToast: function () {
+                // Check to make sure caching is actually enabled—it won't be in the dev environment.
+                if (!document.querySelector('platinum-sw-cache').disabled) {
+                    document.querySelector('#caching-complete').show();
+                }
+            },
+            // Close drawer after menu item is selected if drawerPanel is narrow
+            onDataRouteClick: function (event) {
+                var drawerPanel = document.querySelector('#paperDrawerPanel');
+                if (drawerPanel.narrow && (!event || !event.leaveDrawerOpen)) {
+                    drawerPanel.closeDrawer();
+                }
+            },
+
+            // Scroll page to top and expand header
+            scrollPageToTop: function () {
+                var headerPanel = document.querySelector('paper-header-panel[main]');
+                if (headerPanel) {
+                    headerPanel.$.mainContainer.scrollTop = 0;
+                }
+            },
+            onRefresh: function () {
+                CommonModule.refresh();
+            },
+            onRouteClick: function (event) {
+                if (event.target.id == 'checkboxContainer') return;
+                var route, leaveDrawerOpen;
+                if (event.model && event.model.business)
+                    route = event.model.business.locals.route;
+                else if (event.model && event.model.item) {
+                    route = event.model.item.route;
+                    leaveDrawerOpen = event.model.item.leaveDrawerOpen;
+                }
+                else
+                    route = event.currentTarget.attributes['data-route'].nodeValue;
+                leaveDrawerOpen = leaveDrawerOpen || event.currentTarget.attributes['data-leave-drawer-open']
+                this.onRouteClickAux(route, leaveDrawerOpen);
+            },
+
+            onRouteClickAux: function (route, leaveDrawerOpen) {
+                this.onDataRouteClick({ leaveDrawerOpen: leaveDrawerOpen });
+                page(route);
+            },
+            populateMenu: function () {
+                return [
+                    {
+                        label: 'Register',
+                        id: 'register',
+                        route: '/register',
+                        icon: 'maps:local-atm',
+                        sectionHeader: 'Orders',
+                    },
+                    {
+                        label: 'Floor map',
+                        id: 'floormap',
+                        route: '/floormap',
+                        icon: 'maps:map',
+                    },
+                    {
+                        label: 'Open orders',
+                        id: 'openorders',
+                        route: '/open-orders',
+                        icon: 'receipt',
+                        badgeLabel: '0',
+                        badgeid: 'openorders-badge'
+                    },
+               {
+                   label: 'Order history',
+                   id: 'orderhistory',
+                   route: '/order-history',
+                   icon: 'history',
+               },
+
+               {
+                   label: 'Inventory',
+                   id: 'inventory',
+                   route: '/inventory',
+                   icon: 'assignment',
+                   sectionHeader: 'Inventory',
+               },
+               {
+                   label: 'Menus',
+                   id: 'menus',
+                   route: '/menus',
+                   icon: 'chrome-reader-mode',
+                   sectionHeader: 'CONTENT MANAGEMENT',
+               },
+               {
+                   label: 'Gallery',
+                   id: 'gallery',
+                   route: '/gallery',
+                   icon: 'image:photo-library',
+               },
+               {
+                   label: 'Reviews',
+                   id: 'reviews',
+                   route: '/reviews',
+                   icon: 'maps:rate-review',
+               },
+              {
+                  label: 'Membership',
+                  id: 'membership',
+                  route: '/membership',
+                  icon: 'card-membership',
+              },
+                {
+                    label: 'Sync social media',
+                    id: 'socialmedia',
+                    route: '/socialmedia',
+                    icon: 'social:share',
+                    sectionHeader: 'Account',
+                },
+               {
+                   label: 'Settings',
+                   id: 'settings',
+                   route: '/settings',
+                   icon: 'settings',
+               },
+                {
+                    label: 'Account',
+                    id: 'account',
+                    route: '/account',
+                    icon: 'account-circle',
+                },
+                {
+                    label: 'Log out',
+                    id: 'logout',
+                    route: '/logout',
+                    icon: 'power-settings-new',
+                }];
+            },
+            ///////////////////////////////////
+            onBusinessesClick: function (event) {
+                if (this.$.businessList.hidden) {
+                    var position = $(this.$.businessListButton).offset();
+                    var top = position.top + 1.05 * $(this.$.businessListButton).height();
+                    
+                    this.$.businessList.style.top = top + 'px';
+                    this.$.businessList.style.right = '20px';
+                    this.$.businessList.hidden = false;
+
+                    event.stopPropagation();
+                    event.cancelBubble = true;
+
+                }
+            },
+            getBusinessListItemStyle: function(business, current_business){
+                if (business === current_business)
+                    return 'font-weight: bold; color: cornflowerblue';
+                return 'font-weight: regular; color: darkgray';
+            },
+            onBusinessSelect: function (event) {
+                this.business = event.model.business_from_list;
+                console.log('business ' + this.business.name+ 'selected');
+
+                this.businesses.forEach(function (b) {
+                    b.locals.selected = false;
+                });
+                this.business.locals.selected = true;
+            },
+            onClickEvent: function (event) {
+                this.$.businessList.hidden = true;
+            },
+        });
+    </script>
+</dom-module>

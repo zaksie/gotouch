@@ -1,0 +1,139 @@
+﻿<dom-module id="yummlet-admin">
+    <link rel="import" type="css" href="../styles/admin-styles.css">
+
+    <template>
+        <style>
+            .blurred {
+                -webkit-filter: blur(7px);
+                -moz-filter: blur(7px);
+                -o-filter: blur(7px);
+                -ms-filter: blur(7px);
+                filter: blur(7px);
+            }
+
+            .yummlet-admin-text {
+                color: rgb(139, 180, 95);
+            }
+
+            paper-toolbar {
+                background-image: linear-gradient(rgba(139, 180, 95,0.3), rgba(139, 180, 95,0.3)), url("/public/images/coffee.jpg");
+            }
+        </style>
+        <account-manager backdrop="#paperDrawerPanel"></account-manager>
+        <paper-drawer-panel id="paperDrawerPanel" drawer-width="200px" transition="true">
+            <paper-header-panel drawer>
+                <paper-toolbar id="drawerToolbar" shadow>
+                    <div class="title-bar-fonting">
+                        <span>yummlet</span> <span class="yummlet-admin-text">ADMINS</span>
+                        <div class="paper-font-subhead" style="font-size:xx-small">NO TAG LINE</div>
+                    </div>
+                </paper-toolbar>
+                <!-- Menus go here -->
+                <paper-menu class="list" attr-for-selected="data-route" selected="{{route}}">
+                    <paper-button class="nobutton" data-route="/pos-users" on-click="onRouteClick">
+                        <paper-icon-item>
+                            <iron-icon id="openOrders" icon="supervisor-account" item-icon></iron-icon>
+                            <span>POS users</span>
+                        <paper-icon-item>
+                    </paper-button>
+                </paper-menu>
+
+            </paper-header-panel>
+            <paper-header-panel main shadow="true">
+                <paper-toolbar id="mainToolbar">
+                    <paper-icon-button id="paperToggle" icon="menu" paper-drawer-toggle></paper-icon-button>
+                    <span class="flex"></span>
+                    <data-loader-progress id="dataLoaderProgress"></data-loader-progress>
+                    <span class="flex"></span>
+                    <paper-icon-button icon="account-circle" on-click="onRouteClick" data-route="/account" id="accountButton"></paper-icon-button>
+                    <paper-icon-button icon="refresh" on-click="onRefresh"></paper-icon-button>
+                </paper-toolbar>
+                <div class="content">
+                    <admin-view></admin-view>
+                </div>
+            </paper-header-panel>
+        </paper-drawer-panel>
+    </template>
+    <script>
+        Polymer({
+            is: "yummlet-admin",
+            properties: {
+                route: {
+                    type: String,
+                    notify: true,
+                    value: function () { return '/pos-users'; }
+                },
+            },
+            ready: function () {
+            },
+            attached: function () {
+                app = this;
+                PubSub.subscribe('app.scrollToTop', function () {
+                    this.scrollPageToTop();
+                }.bind(this));
+
+                PubSub.subscribe('User.logged', this.onSessionChange.bind(this));
+                PubSub.subscribe('User.logged.in', this.onLoginSuccess.bind(this));
+
+                this.onSessionChange();
+
+                PubSub.subscribe('Loading.progress', function (msg, percent) {
+                    this.$.dataLoaderProgress.percent = percent;
+                }.bind(this));
+
+                PubSub.subscribe('Drawer', function (msg) {
+                    if (_.includes(msg, 'close'))
+                        return $('#paperDrawerPanel').closeDrawer();
+                    $('#paperDrawerPanel').openDrawer();
+                }.bind(this));
+
+                PubSub.publish('App.ready', null);
+            },
+            onLoginSuccess: function () {
+                CommonModule.refresh();
+            },
+            onSessionChange: function () {
+                var color = CommonModule.modules.user.current.is() ? 'green' : 'white';
+                this.$.accountButton.style.color = color;
+            },
+            displayInstalledToast: function () {
+                // Check to make sure caching is actually enabled—it won't be in the dev environment.
+                if (!document.querySelector('platinum-sw-cache').disabled) {
+                    document.querySelector('#caching-complete').show();
+                }
+            },
+            onRefresh: function () {
+                CommonModule.refresh();
+            },
+            // Close drawer after menu item is selected if drawerPanel is narrow
+            onDataRouteClick: function (event) {
+                var drawerPanel = document.querySelector('#paperDrawerPanel');
+                if (drawerPanel.narrow) {
+                    drawerPanel.closeDrawer();
+                }
+            },
+
+            // Scroll page to top and expand header
+            scrollPageToTop: function () {
+                var headerPanel = document.querySelector('paper-header-panel[main]');
+                if (headerPanel) {
+                    headerPanel.$.mainContainer.scrollTop = 0;
+                }
+            },
+            onRouteClick: function (event) {
+                if (event.target.id == 'checkboxContainer') return;
+                var route
+                if (event.model)
+                    route = event.model.business.route;
+                else
+                    route = event.currentTarget.attributes['data-route'].nodeValue;
+                this.onRouteClickAux(route);
+            },
+
+            onRouteClickAux: function (route) {
+                this.onDataRouteClick();
+                page(route);
+            },
+        });
+    </script>
+</dom-module>

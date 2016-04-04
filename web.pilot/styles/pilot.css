@@ -1,0 +1,145 @@
+﻿:host {
+    color: white;
+}
+
+.blurred {
+    -webkit-filter: blur(7px);
+    -moz-filter: blur(7px);
+    -ms-filter: blur(7px);
+    filter: blur(7px);
+}
+
+.bg-image1 {
+    background-image: radial-gradient(rgba(0,0,0,0.5), rgba(0,0,0,0)), url(/public/images/coffee.jpg);
+    background-size: cover;
+    background-position: center center;
+    position: absolute;
+    width: 100%;
+}
+
+.text-header {
+    font-family: 'Petit Formal Script', cursive;
+    font-size: 1.2em;
+    line-height: 75%;
+}
+
+.hi-zindex * {
+    z-index: 1;
+}
+
+.full-screen {
+    min-height: calc(100vh - 64px);
+    margin:0;
+}
+
+.text-title {
+    font-family: 'Fjalla One', sans-serif;
+    font-size: 4.2em;
+    color: whitesmoke;
+}
+
+.text-hebrew {
+    font-family: 'Alef', sans-serif;
+    direction: rtl;
+    font-size: medium;
+}
+
+.text-emphasis {
+}
+
+#navbar {
+    background: rgb(40,40,40);
+}
+
+.grid {
+    display: flex;
+    -ms-flex-wrap: wrap;
+    -webkit-flex-wrap: wrap;
+    flex-wrap: wrap;
+    width: 100%;
+    justify-content: center;
+}
+
+.grid-item {
+    -ms-flex: 1 1 auto;
+    -webkit-flex: 1 1 auto;
+    flex: 1 1 auto;
+    width: 250px;
+    min-width: 250px;
+    max-width: 300px;
+    background: whitesmoke;
+    padding: 30px 10px;
+    margin: 20px;
+    height: 190px;
+}
+
+.card-title {
+    text-align: center;
+    font-size: large;
+    font-weight: bolder;
+    color: green;
+}
+
+.card-body {
+    text-align: center;
+    font-size: small;
+}
+
+.registration{
+    background:no-repeat radial-gradient(rgba(255,255,255,1), rgba(255,255,255,0.9)), url(/public/images/social-media.jpg);
+    background-size:cover;
+    background-position:center center;
+    color:black;
+    margin:0;
+    width:100%;
+    min-height:80vh;
+}
+
+#registration{
+    width: 90%;
+    max-width: 480px;
+
+}
+
+.contact{
+    background:rgb(40,40,40);
+    color:whitesmoke;
+    padding: 15px 0; 
+    font-size: small;
+    width:100%;
+    margin:0;
+    min-height:calc(20vh - 64px);
+
+}
+
+.buffer{
+    background:rgb(20,20,20);
+    width:100%;
+    min-height:20vh;
+}
+
+.submit-button, .reg-button{
+    font-size: x-large !important;
+    padding: 10px;
+    width: 300px;
+}
+.submit-button {
+    background: cornflowerblue;
+    width:auto;
+}
+
+a { color: inherit !important; } 
+
+a paper-button{
+    font-size:small;
+}
+
+.reg-button {
+    background: green;
+}
+
+.reg-title{
+    font-size: x-large !important;
+    color:gray;
+    text-align:center;
+}

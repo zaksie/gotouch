@@ -1,0 +1,35 @@
+﻿<dom-module id="shopping-basket">
+    <template>
+        <link rel="import" type="css" href="../../web.common/styles/shared-by-elements.css">
+        <style>
+           paper-badge{
+               --paper-badge-opacity: 0.8;
+           }
+        </style>
+        <div style="position:relative">
+            <paper-icon-button icon="shopping-basket" alt="Go to shopping basket">
+            </paper-icon-button>
+            <iron-icon id="shopping-basket" icon="shopping-basket" style="visibility: hidden;position:absolute; top:0; left:0; bottom:0;right:0; margin:auto;"></iron-icon>
+            <paper-badge for="shopping-basket" label="{{count}}"></paper-badge>
+        </div>
+    </template>
+    <script>
+        
+        Polymer({
+            is: "shopping-basket",
+            properties: {
+                count: {
+                    type: Number,
+                    notify: true,
+                    value: function () { return 0;}
+                }
+            },
+            ready: function () {
+                PubSub.subscribe('Tab', this.onArticleCountChange.bind(this));
+            },
+            onArticleCountChange: function () {
+                this.count = CommonModule.modules.tab.current.count();
+            }
+        });
+    </script>
+</dom-module>

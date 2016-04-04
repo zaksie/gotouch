@@ -1,0 +1,61 @@
+﻿
+<dom-module id="social-media-facebook">
+
+    <template>
+        <link rel="import" type="css" href="../../web.common/styles/shared-by-elements.css">
+
+        <style>
+            .header{
+                font-size:medium;
+                font-weight:bold;
+                color:darkgray;
+            }
+        </style>
+        <paper-material class="with-margins">
+            <div class="header">
+                FACEBOOK
+            </div>
+            <paper-button raised on-click="onSocialLink">link account</paper-button>
+                <!--
+            <div class="full layout horizontal">
+                <paper-material class="circular-avatar-xsmall" style$="{{getImageStyle(review.avatar)}}"></paper-material>
+                <div class="full layout vertical">
+                    <div class="full layout horizontal">
+                        <a href="{{review.author_url}}" target="_blank">{{review.author_name}}</a>
+                        <span class="flex"></span>
+                        <div class="layout vertical" style="float:right">
+                            <div class="review-info layout horizontal">
+                                <iron-icon icon="device:access-time"></iron-icon>
+                                <span>{{formatTime(review.time)}}</span>
+                            </div>
+                            <div class="review-info layout horizontal">
+                                <iron-icon icon="language"></iron-icon>
+                                <span>{{formatLanguage(review.language)}}</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="full" style="padding-left:30px">
+                        <span>{{review.text}}</span>
+                    </div>
+                </div>
+            </div>
+                    -->
+        </paper-material>
+    </template>
+    <script>
+        Polymer({
+            is: "social-media-facebook",
+            properties: {
+
+            },
+            ready: function () {
+            },
+            attached: function () {
+            },
+            onSocialLink: function () {
+                CommonModule.modules.social.linkPage();
+            }
+        });
+
+    </script>
+</dom-module>

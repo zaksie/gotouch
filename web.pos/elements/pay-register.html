@@ -1,0 +1,75 @@
+﻿
+<dom-module id="pay-register">
+
+    <template>
+        <link rel="import" type="css" href="../../web.common/styles/shared-by-elements.css">
+
+        <style>
+            :host{
+                width:100vw;
+                height:calc(100vh - 64px);
+            }
+        </style>
+        <div class="layout vertical center center-justified">
+            <form id="form" action="/chefs/access/accept-payment" method="post" enctype="multipart/form-data">
+                <div class="layout horizontal">
+                    <paper-button id="record" class="red-300" disabled$="{{recorder.recording}}" raised on-click="onRecord">record</paper-button>
+                    <paper-button id="stop" class="grey-300" disabled$="{{!recorder.recording}}" raised on-click="onStop">stop</paper-button>
+                </div>
+                <paper-button id="submit" class="blue-300" raised on-click="onSubmit">submit</paper-button>
+            </form>
+            <div id="log"></div>
+            <div id="recordingslist"></div>
+        </div>
+    </template>
+    <script src="../../public/js/recorder/recordmp3.js"></script>
+    <script>
+        var audioContext = new AudioContext;
+        var recorder;
+        var log, recordingslist;
+        Polymer({
+            is: "pay-register",
+            properties: {
+            },
+            ready: function () {
+            },
+            attached: function () {
+                log = this.$.log;
+                recordingslist = this.$.recordingslist;
+                var errorCallback = function (e) {
+                    console.log('Reeeejected!', e);
+                };
+
+                // Not showing vendor prefixes.
+                navigator.mediaDevices.getUserMedia({ audio: true })
+                    .then(function (localMediaStream) {
+                        console.log('RECORDER: creating input...');
+                        var input = audioContext.createMediaStreamSource(localMediaStream);
+                        console.log('RECORDER: creating recorder...');
+                        recorder = new Recorder(input, {
+                            numChannels: 1
+                        });
+                    })
+                    .catch(errorCallback);
+            },
+            onRecord: function () {
+                recorder.record();
+            },
+            onStop: function () {
+                recorder.stop();
+            },
+            onSubmit: function () {
+                recorder.exportWAV(function (blob) {
+                    formData = new FormData(form);
+                    formData.append("blob", blob);
+
+                    var request = new XMLHttpRequest();
+                    request.withCredentials = true;
+                    request.open("POST", "/chefs/access/accept-payment", true);
+                    request.send(formData);
+                });
+            },
+        });
+
+    </script>
+</dom-module>

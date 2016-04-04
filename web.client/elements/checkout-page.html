@@ -1,0 +1,59 @@
+﻿<link rel="import" href="pay-with-paypal.html">
+<link rel="import" href="pay-with-cc.html">
+<dom-module id="checkout-page">
+    
+    <link rel="import" type="css" href="../../web.common/styles/shared-by-elements.css">
+    <template>
+        <style>
+            paper-material {
+                padding: 15px;
+                display:block;
+                margin-bottom:15px;
+            }
+        </style>
+            <div style="max-width:400px; width: 100%; left:0;right:0; margin:auto">
+                <paper-material>
+                    <div class="fjalla-caption">CHECKOUT</div>
+                    <br />
+                    <guest-check business="{{business}}"></guest-check>
+                    <br />
+                </paper-material>
+                <paper-material>
+                    <pay-with-cc enabled="{{!isBasketEmpty}}" on-cc-selected="onCCSelected" on-message="onMessage"></pay-with-cc>
+                    <pay-with-paypal id="paypal" enabled="{{!isBasketEmpty}}" on-message="onMessage"></pay-with-paypal>
+                </paper-material>
+            </div>
+    </template>
+    <script>
+        
+        Polymer({
+            is: "checkout-page",
+            properties: {
+                isBasketEmpty: {
+                    type: Boolean,
+                    notify: true,
+                    value: function () { return true;}
+                },
+                business: {
+                    type: Object,
+                    notify: true,
+                    reflectToAttribute: true
+                }
+            },
+            ready: function () {
+                PubSub.subscribe('Tab', this.onArticleCountChange.bind(this));
+            },
+            onArticleCountChange: function () {
+                this.isBasketEmpty = !CommonModule.modules.tab.current.count();
+            },
+            onCCSelected: function (event, value) {
+                this.$.paypal.hidden = value;
+            },
+            onMessage: function (message) {
+                this.dialogHeader = message.header;
+                this.dialogBody = message.body;
+                this.$.msgDlg1.open();
+            }
+        });
+    </script>
+</dom-module>

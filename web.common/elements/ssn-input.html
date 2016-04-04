@@ -1,0 +1,80 @@
+<dom-module id="ssn-input">
+    <template>
+        <style>
+            :host {
+                display: inline-block;
+            }
+
+            input[is="iron-input"] {
+                font: inherit;
+                outline: none;
+                box-shadow: none;
+                border: none;
+                width: auto;
+                text-align: center;
+            }
+        </style>
+        <div class="horizontal layout" on-click="onInputClick">
+            <input class="flex" id="ssn1id" style="margin-left:25%" type="text"
+                   is="iron-input" mxlength="{{mxlength}}" bind-value="{{ssn1}}" size="{{mxlength}}" on-input="onSSN1Input" />
+            <span style="margin: auto 15px"> - </span>
+            <input class="flex" id="ssn2id" style="margin-right:25%" type="text"
+                   is="iron-input" mxlength="{{mxlength}}" bind-value="{{ssn2}}" size="{{mxlength}}" on-input="onSSN2Input" />
+        </div>
+    </template>
+    <script>
+        Polymer({
+            is: 'ssn-input',
+
+            properties: {
+                value: {
+                    notify: true,
+                    type: String
+                },
+
+                ssn1: {
+                    type: String,
+                    notify: true,
+
+                },
+
+                ssn2: {
+                    notify: true,
+                    type: String
+                },
+                mxlength: {
+                    notify: true,
+                    type: Number
+                },
+            },
+
+            observers: [
+              '_computeValue(ssn1,ssn2)'
+            ],
+            onSSN1Input: function (event) {
+                if (this.ssn1.length > this.mxlength) {
+                    var p1 = this.ssn1.substring(0, this.mxlength);
+                    var p2 = this.ssn1.substring(this.mxlength);
+                    this.ssn1 = p1;
+                    this.ssn2 = p2;
+                    this.$.ssn2id.focus();
+                }
+            },
+            onSSN2Input: function (event) {
+                if (this.ssn2.length == 0)
+                    this.$.ssn1id.focus();
+                else if (this.ssn2.length > this.mxlength)
+                    this.ssn2 = this.ssn2.substring(0, this.mxlength);
+
+            },
+            onInputClick: function () {
+                idInFocus = document.activeElement.id;
+                if (idInFocus != 'ssn1id' && idInFocus != 'ssn2id')
+                    this.$.ssn1id.focus();
+            },
+            _computeValue: function (ssn1, ssn2) {
+                this.value = ssn1.trim() + ssn2.trim();
+            }
+        });
+    </script>
+</dom-module>

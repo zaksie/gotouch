@@ -1,0 +1,326 @@
+﻿
+<dom-module id="floor-map">
+
+    <template>
+        <link rel="import" type="css" href="../../web.common/styles/shared-by-elements.css">
+        <style>
+            :host {
+                height: calc(100vh - 64px);
+                margin: 0;
+                padding: 0;
+            }
+
+            .floormap-layer, .floormap-base {
+                width: 100%;
+                height: 100%;
+                position: absolute;
+            }
+
+            .floormap-layer {
+                pointer-events: none;
+            }
+
+            .circular-avatar-small {
+                opacity: 0.6;
+            }
+
+                .circular-avatar-small:hover {
+                    opacity: 1;
+                }
+
+            .selected {
+                opacity:1;
+                border: 2px black !important;
+                box-shadow: 0 0 12px white !important;
+            }
+
+            .floormap-button {
+                border: solid 2px black;
+            }
+
+            .floormap-view {
+                position: absolute;
+                top: 5%;
+                right: 5%;
+            }
+            .layer-dialog{
+                width:50vw;
+                height:50vh;
+                background:whitesmoke;
+            }
+            paper-button {
+                display:block;
+                text-align:left;
+                background:white;
+            }
+            .layer-tooltip{
+                z-index:1;
+                pointer-events: none;
+                opacity:0.8;
+                border:green 2px;
+                box-shadow: 0 0 10px white;
+                text-transform:uppercase;
+                position:absolute;
+                -moz-transition: all 0.2s ease;
+                -o-transition: all 0.2s ease;
+                -webkit-transition: all 0.2s ease;
+                transition: all 0.2s ease;
+            }
+        </style>
+        <link rel="import" type="css" href="../styles/navigation-controls.css">
+
+        <div id="main" class="fullbleed" style="position:relative; height:100%; overflow: hidden">
+            <paper-dialog id="layerDialog" class="layer-dialog" auto-fit-on-attach
+                    entry-animation="scale-up-animation"
+                    exit-animation="scale-down-animation">
+                <div class="fullbleed layout vertical center" style="height:90%">
+                    <div class="flex center center-justified">
+                        INFO ABOUT <span id="tableNo" style="text-transform:uppercase"></span>
+                    </div>
+                    <div class="layout horizontal">
+                        <paper-button raised on-click="onLayerNewTabClick">
+                            <iron-icon src="/public/images/ic_fiber_new_black_24px.svg"></iron-icon>
+                            new tab
+                        </paper-button>
+                        <paper-button raised on-click="onLayerAddToTabClick">
+                            <iron-icon icon="add-box"></iron-icon>
+                            add to tab
+                        </paper-button>
+                        <paper-button raised on-click="onLayerPayTabClick">
+                            <iron-icon icon="done"></iron-icon>
+                            pay tab
+                        </paper-button>
+                    </div>
+                </div>
+            </paper-dialog>
+            <img class="floormap-base" src="{{floormap.png}}" usemap="#layermap" style="z-index:0"/>
+            <map name="layermap">
+                <template is="dom-repeat" items="{{floormap.layers}}" as="layer">
+                    <area alt="{{layer.name}}" title="{{layer.name}}" shape="poly" coords="{{calcCoords(layer.coords, layer, sizeChange)}}" on-mouseover="onMouseOver" on-mouseout="onMouseOut" on-click="onLayerClick" />
+                </template>
+            </map>
+            <template is="dom-repeat" items="{{floormap.layers}}" as="layer">
+                <div hidden$="{{layer.hide}}">
+                    <img class="floormap-layer" src="{{layer.png}}" />
+                </div>
+            </template>
+            <template is="dom-repeat" items="{{tooltips}}">
+                <paper-material class="circular-avatar-xxsmall layer-tooltip" style$="{{item.position}}">{{item.text}}</paper-material>
+            </template>
+            <div class="control-buttons layout vertical">
+                <paper-icon-button style="position:absolute; top: 42px; right:0" icon="editor:mode-edit"></paper-icon-button>
+            </div>
+            <div class="floormap-view layout horizontal center">
+                <template is="dom-repeat" items="{{business.floormaps}}" as="floormap">
+                    <paper-button class="circular-avatar-small floormap-button" raised style$="{{getImageStyle(floormap.png)}}" on-click="onFloormapSelect"></paper-button>
+                </template>
+            </div>
+        </div>
+    </template>
+    <script>
+        Polymer({
+            is: "floor-map",
+            behaviors: [
+                 Polymer.IronResizableBehavior
+            ],
+            listeners: {
+                'iron-resize': 'onResize'
+            },
+            properties: {
+                tooltips: {
+                    type: Array,
+                    notify: true,
+                    value: function () { return [];}
+                },
+                business: {
+                    type: Object,
+                    notify: true,
+                    reflectToAttribute: true,
+                    observer: 'onBusinessChange',
+                    value: function () { return { floormaps: [] }; }
+                },
+                floormap: {
+                    type: Object,
+                    notify: true,
+                    observer: 'onFloormapChange'
+                },
+                sizeChange: {
+                    type: Boolean,
+                    notify: true,
+                    value: function () { return true; }
+                }
+            },
+            ready: function () {
+            },
+            attached: function () {
+                this.async(this.notifyResize, 1);
+            },
+            onBusinessChange: function () {
+                if (!this.business) return;
+                this.set('business.floormaps', floormaps);
+                this.onFloormapSelect({ model: { floormap: floormaps[0] } });
+            },
+            onFloormapChange: function () {
+                this.calibrateTooltips();
+            },
+            calibrateTooltips: function(){
+                var tooltips = _.map(this.floormap.layers, function (layer) {
+                    return { text: layer.number, position: 'top: ' + layer.center.y + 'px; left: ' + layer.center.x + 'px;' };
+                });
+
+                this.splice.apply(this, ['tooltips', 0, this.tooltips.length].concat(tooltips));
+            },
+            onMouseOver: function (event) {
+                this.set('floormap.layers.' + event.model.index + '.hide', false);
+            },
+            onMouseOut: function (event) {
+                this.set('floormap.layers.' + event.model.index + '.hide', true);
+            },
+            getMapId: function (id) {
+                return '#' + id;
+            },
+            onResize: function (event) {
+                console.log('in onResize');
+                this.sizeChange = !this.sizeChange;
+            },
+            getImageStyle: function (image) {
+                return 'background: center center /cover no-repeat url(' + image + ');';
+            },
+            calcCoords: function (coords, layer) {
+                var wf = this.clientWidth / this.floormap.width;
+                var hf = this.clientHeight / this.floormap.height;
+                var result = coords.split(',').map(function (coord, index) {
+                    return parseInt(coord) * (index % 2 ? hf : wf);
+                }).join(',');
+                layer.center = CommonModule.modules.business.recalcCenter(result);
+                this.debounce('calibrateTooltips', this.calibrateTooltips.bind(this), 200);
+
+                return result;
+            },
+            onFloormapSelect: function (event) {
+                this.floormap = event.model.floormap;
+                var buttons = this.querySelectorAll('.floormap-button');
+                _.forEach(buttons, function (button) {
+                    var toggleOn = button.dataHost.floormap === event.model.floormap;
+                    this.toggleClass('selected', toggleOn, button);
+                }.bind(this));
+            },
+            onLayerClick: function (event) {
+                this.$.tableNo.innerHTML = event.model.layer.name;
+                this.$.layerDialog.open();
+            },
+            onLayerPayTabClick: function (event) {
+
+            },
+            onLayerAddToTabClick: function (event) {
+
+            },
+            onLayerNewTabClick: function (event) {
+
+            }
+        });
+
+        var floormaps = [
+        {
+            width: 981,
+            height: 654,
+            png: '/public/images/cafes/floormap/1/Background.png',
+            name: 'Front',
+            id: 'main',
+            layers: [
+        {
+            coords: "15,543,32,518,74,506,105,486,195,478,196,528",
+            png: '/public/images/cafes/floormap/1/Layer-1.png',
+            name: 'Table 1',
+            id: 'm1'
+        },
+        {
+            coords: "101,431,131,413,204,413,205,437,104,438",
+            png: '/public/images/cafes/floormap/1/Layer-2.png',
+            name: 'Table 2',
+            id: 'm2'
+        },
+        {
+            coords: "762,442,859,432,890,448,925,445,978,467,980,493,942,496,765,453",
+            png: '/public/images/cafes/floormap/1/Layer-3.png',
+            name: 'Table 3',
+            id: 'm3'
+        },
+        {
+            coords: "620,407,713,403,741,413,787,422,786,434,704,439,620,420",
+            png: '/public/images/cafes/floormap/1/Layer-4.png',
+            name: 'Table 4',
+            id: 'm4'
+        },
+        {
+            coords: "449,479,515,446,674,458,641,507,453,491",
+            png: '/public/images/cafes/floormap/1/Layer-5.png',
+            name: 'Table 5',
+            id: 'm5'
+        },
+        {
+            coords: "347,422,417,406,504,417,449,438,348,431",
+            png: '/public/images/cafes/floormap/1/Layer-6.png',
+            name: 'Table 6',
+            id: 'm6'
+        },
+        {
+            coords: "668,652,629,620,960,565,978,575,980,653",
+            png: '/public/images/cafes/floormap/1/Layer-7.png',
+            name: 'Table 7',
+            id: 'm7'
+        }
+            ]
+        },
+        {
+            width: 1300,
+            height: 866,
+            png: '/public/images/cafes/floormap/2/Background.png',
+            name: 'Front',
+            id: 'main',
+            layers: [
+        {
+            coords: "330,435,415,352,509,420,426,504",
+            png: '/public/images/cafes/floormap/2/Layer-1.png',
+            name: 'Table 1',
+            id: 'm1'
+        },
+        {
+            coords: "722,349,783,279,896,350,841,421",
+            png: '/public/images/cafes/floormap/2/Layer-2.png',
+            name: 'Table 2',
+            id: 'm2'
+        },
+        {
+            coords: "354,175,428,111,511,169,439,232",
+            png: '/public/images/cafes/floormap/2/Layer-3.png',
+            name: 'Table 3',
+            id: 'm3'
+        },
+        {
+            coords: "435,806,527,700,636,788,574,864,506,864",
+            png: '/public/images/cafes/floormap/2/Layer-4.png',
+            name: 'Table 4',
+            id: 'm4'
+        },
+        {
+            coords: "839,865,888,793,983,865",
+            png: '/public/images/cafes/floormap/2/Layer-5.png',
+            name: 'Table 5',
+            id: 'm5'
+        },
+        {
+            coords: "1020,600,1082,499,1192,565,1130,670",
+            png: '/public/images/cafes/floormap/2/Layer-6.png',
+            name: 'Table 6',
+            id: 'm6'
+        }
+            ]
+        }
+        ];
+
+        floormaps.forEach(function (floormap) {
+            CommonModule.modules.business.setupMissingFieldsInFloormap(floormap);
+        });
+    </script>
+</dom-module>

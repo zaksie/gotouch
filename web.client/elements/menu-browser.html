@@ -1,0 +1,194 @@
+<!--
+Copyright (c) 2015 The Polymer Project Authors. All rights reserved.
+This code may only be used under the BSD style license found at http://polymer.github.io/LICENSE.txt
+The complete set of authors may be found at http://polymer.github.io/AUTHORS.txt
+The complete set of contributors may be found at http://polymer.github.io/CONTRIBUTORS.txt
+Code distributed by Google as part of the polymer project is also
+subject to an additional IP rights grant found at http://polymer.github.io/PATENTS.txt
+-->
+
+<link rel="import" href="article-details.html">
+<dom-module id="menu-browser">
+    <link rel="import" type="css" href="../../web.common/styles/menu-section.css">
+    <link rel="import" type="css" href="../../web.common/styles/image-gallery-css3d.css">
+    <link rel="import" type="css" href="../../web.common/styles/shake-animation.css">
+    <template>
+        <link rel="import" type="css" href="../../web.common/styles/shared-by-elements.css">
+        <style>
+            #page-slider {
+                color: white;
+            }
+        </style>
+        <div id="menuPictureContainer" class="layout vertical center">
+            <div class="menu-name" style="height:20px">
+                <span>{{menu.title}}</span>
+                <div class="separator"></div>
+            </div>
+            <br />
+            <div class="layout horizontal center">
+                <div>
+                    <paper-icon-button id="back" icon="zoom-out" on-click="onBackClick" disabled$="{{!section.parent_id}}"></paper-icon-button>
+                    <paper-tooltip for="back">Go back a section</paper-tooltip>
+                </div>
+                <template is="dom-if" if="{{isMultiplePaged(menu)}}">
+                    <paper-slider id="page-slider" hidden="{{detailsVisible}}" min="1" max="{{getSliderMax(menu)}}"
+                                  on-immediate-value-change="onSliderChange" on-value-change="onSliderChange" markers="{{getSliderMarker(menu)}}" snaps pin expand></paper-slider>
+                </template>
+            </div>
+            <br />
+            <paper-material id="menuPicture" class$="{{imageClass}}" style$="{{getPictureStyle(section)}}" on-click="onImageClick" elevation="2">
+                <paper-spinner id="spinner" hidden></paper-spinner>
+            </paper-material>
+            <br />
+            <div hidden="{{!detailsVisible}}" class="hidden-animation" style="text-align:center">
+                <article-details id="details" on-animate="animateSelectedItem" on-section-back-click="onBackClick"></article-details>
+            </div>
+        </div>
+        <img id="loading-space" hidden />
+    </template>
+    <script>
+        const SHAKE_CLASS = 'cmn-t-shake';
+        var initialImageClass = "menu-picture glossy";
+        Polymer({
+            is: 'menu-browser',
+
+            behaviors: [
+              Polymer.NeonAnimatableBehavior
+            ],
+
+            properties: {
+                menu: {
+                    type: Object,
+                    notify: true,
+                    observer: 'onMenuChange'
+                },
+                page: {
+                    type: Object,
+                    notify: true,
+                    observer: 'onPageChange'
+                },
+                section: {
+                    type: Object,
+                    notify: true,
+                },
+                history: {
+                    type: Array,
+                    value: function () { return []; }
+                },
+                detailsVisible: {
+                    type: Boolean,
+                    value: function () { return false; }
+                },
+                imageClass: {
+                    type: String,
+                    value: function () { return initialImageClass; }
+                },
+                leftEnabled: {
+                    type: Boolean,
+                    notify: true,
+                    value: function () { return false; }
+                }
+            },
+            observers: [
+                'initializeSection(page)'
+            ],
+            ready: function () {
+            },
+            attached: function () {
+                this.this = this;
+                this.async(function () {
+                    this.activateSpinner(true);
+                }.bind(this));
+            },
+            onMenuChange: function () {
+                if (!this.menu) return;
+
+                console.log('OBSERVER: menu change');
+                this.page = this.menu.pages[0];
+            },
+            isMultiplePaged: function () {
+                return this.menu && this.menu.pages.length > 1;
+            },
+            onSliderChange: function (event) {
+                var val = event.target.immediateValue;
+                if (val && this.menu.pages && (val - 1) > -1 && (val - 1) <= this.menu.pages.length) {
+                    this.page = this.menu.pages[val - 1];
+                }
+            },
+            onPageChange: function () {
+                this.activateSpinner(true);
+                $(this.$['loading-space']).attr('src', this.page.jpg).load(function () {
+                    this.$.menuPicture.style.backgroundImage = 'url(' + this.page.jpg + ')';
+                    this.activateSpinner(false);
+                }.bind(this));
+            },
+            initializeSection: function (page) {
+                this.section = this.page;
+            },
+            onBackClick: function (event) {
+                if (this.history.length > 0)
+                    return this.section = this.pop('history');
+                //return this.fire('back-click', event);
+            },
+            getImageAlt: function (index) {
+                return 'Page No. ' + index + ' from the ' + this.menu.title + ' menu';
+            },
+            getImageWidth: function (page) {
+                return $(this.$['menu-browser-container']).width();
+            },
+            getImageHeight: function (page) {
+                var width = $(this.$['menu-browser-container']).width();
+                return page.height * width / page.width;
+            },
+            onImageClick: function (event) {
+                var x = event.offsetX;
+                var y = event.offsetY;
+                var width = event.currentTarget.clientWidth;
+                var height = event.currentTarget.clientHeight;
+                var result = CommonModule.modules.menu.visual.getClickSectionPosition(x / width, y / height, this.section);
+                if (result) {
+                    this.push('history', this.section);
+                    this.section = result;
+                }
+            },
+            activateSpinner: function (active) {
+                this.$.spinner.active = active;
+                this.$.spinner.hidden = !active;
+            },
+            getPictureStyle: function (activeSection) {
+                this.showDetails(this.section.final);
+                var value = CommonModule.modules.menu.visual.getPictureStyle(this.section, this.page, $('#mainContainer').width());
+                return value.size.text + value.bg;
+            },
+            showDetails: function (show) {
+                if (show) {
+                    this.$.details.article = this.section;
+                    PubSub.publish('app.scrollToTop');
+                }
+                this.detailsVisible = show;
+            },
+            animateSelectedItem: function () {
+                this.toggleClass(SHAKE_CLASS, true, this.$.menuPicture);
+                setTimeout(function () {
+                    this.toggleClass(SHAKE_CLASS, false, this.$.menuPicture);
+                }.bind(this), 600)
+            },
+            getSliderMax: function (menu) {
+                if (menu && menu.pages)
+                    return menu.pages.length;
+                else
+                    return 1;
+            },
+            getSliderMarker: function () {
+                return this.menu ? _.map(this.menu.pages || [], function (page) { return page.marker; }) : [];
+            },
+            isInZoom: function (section) {
+                return section && section != this.page && !section.final;
+            },
+            isSliderTooltipVisible: function (detailsVisible, menu) {
+                return !detailsVisible && (menu.pages && menu.pages.length > 1);
+            }
+        });
+
+    </script>
+</dom-module>

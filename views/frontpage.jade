@@ -1,0 +1,59 @@
+﻿doctype html
+html(lang='en')
+  head
+    meta(charset='utf-8')
+    meta(http-equiv='X-UA-Compatible', content='IE=edge')
+    meta(name='viewport', content='width=device-width, initial-scale=1, maximum-scale=1')
+    meta(name='description', content='')
+    meta(name='author', content='')
+    script(src="https://ajax.googleapis.com/ajax/libs/jquery/2.1.4/jquery.min.js")
+    script(src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.5/js/bootstrap.min.js" async)
+    // Bootstrap Core CSS
+    link(rel="stylesheet", href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.5/css/bootstrap.min.css" async)
+    link(rel="stylesheet", href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.5/css/bootstrap-theme.min.css", async)
+    link(href='/public/css/fixed-page-styles.css', rel='stylesheet')
+    link(rel="stylesheet", type="text/css", href="/public/css/component.css")
+  body.goTouchBG.full.whiteText
+      .container-fluid
+          .row
+            .box
+                svg(xmlns='http://www.w3.org/2000/svg', width='100%', height='100%')
+                    line.top(x1='0', y1='0', x2='900', y2='0')
+                    line.left(x1='0', y1='460', x2='0', y2='-920')
+                    line.bottom(x1='300', y1='460', x2='-600', y2='460')
+                    line.right(x1='300', y1='0', x2='300', y2='1380')
+                .caption-text
+                    h1 yummlet
+                span Waiters hate us
+                .at-the-bottom#placeholder
+                    button.btn.btn-lg.btn-warning
+                        span.glyphicon.glyphicon-refresh.glyphicon-refresh-animate
+                        span  Loading...
+
+      script.
+        if(!navigator.cookieEnabled)
+        {   
+            var content = '<div class="layout horizontal center-justified">'
+            + 'Sorry, this app requires that cookies be enabled'
+            + '</div>';
+            $('#placeholder').html(content);
+        }
+        else
+        {
+        window.addEventListener('PolymerCoreElementsLoaded', function() {
+            var content = '<div class="layout horizontal center-justified">'
+            + '<a href="/chefs" style="margin:10px"><paper-button style="background-color:#FDEEF4; width:100px" raised>Chefs</paper-button></a>'
+            + '<a href="/diners" style="margin:10px"><paper-button style="background-color:#F88017; color: white;width:100px" raised>Diners</paper-button></a>'
+            + '</div>';
+            $('#placeholder').html(content);
+        });
+        $(window).load(function() {
+            $.getScript("/bower_components/webcomponentsjs/webcomponents.min.js");
+            
+            var link = document.createElement('link');
+            link.rel = 'import';
+            link.href = '/public/app.common/polymer-components.html'
+            document.head.appendChild(link);
+
+        });
+        }

@@ -1,0 +1,149 @@
+﻿
+<link rel="import" href="../../web.common/elements/dropdown/x-select.html">
+<dom-module id="guest-check-pos">
+    <template>
+        <link rel="import" type="css" href="../../web.common/styles/shared-by-elements.css">
+        <link rel="import" type="css" href="../../web.common/styles/tables.css">
+        <link rel="import" type="css" href="../../web.common/styles/guest-check.css">
+        <style>
+            iron-icon.small {
+                height: 18px;
+                width: 18px;
+            }
+
+            .check {
+                background: white;
+                padding: 0;
+                height:100%;
+            }
+        </style>
+                <paper-material class="layout vertical check" elevation="1">
+                    <paper-spinner id="spinner" hidden></paper-spinner>
+                    <div class="caption" style="display:block; text-align:center">{{businessName}}</div>
+                    <table class="details-table">
+                            <tr>
+                                <td>
+                                    <div>
+                                        Date
+                                        <div class="handwriting">{{tab.date}}</div>
+                                    </div>
+                                </td>
+                                <td>
+                                    <div>
+                                        Table
+                                        <div class="handwriting">{{tab.no}}</div>
+                                    </div>
+                                </td>
+                                <td>
+                                    <div>
+                                        Guests
+                                        <div class="handwriting">{{tab.dinersCount}}</div>
+                                    </div>
+                                </td>
+                                <td>
+                                    <div>
+                                        Server
+                                        <div class="handwriting">{{tab.server}}</div>
+                                    </div>
+                                </td>
+                                <td colspan="2">
+                                    <div>
+                                        <div class="serial-number">{{tab.mockSerialNumber}}</div>
+                                    </div>
+                                </td>
+                            </tr>
+                        </table>
+                    <div class="stam">
+                            APPT-SOUP/SAL-ENTREE-VEG/POT-DESSERT-BEV
+                        </div>
+                    <div class="flex handwriting check-body layout vertical">
+                            <div class="flex" style="position:relative; display:block; max-height: 100%; overflow-y:auto;overflow-x:hidden">
+                                <div style="position:absolute;overflow:hidden; max-height:100%">
+                                    <div class="table">
+                                        <template is="dom-repeat" items="{{DUMMY_ENTRIES}}">
+                                            <div class="item-row row">
+                                                <div class="cell" width="20%"></div>
+                                                <div class="cell" width="60%"></div>
+                                                <div class="cell" width="20%"></div>
+                                            </div>
+                                        </template>
+                                    </div>
+                                </div>
+                                <div class="table">
+                                    <template is="dom-repeat" items="{{tab.articles}}">
+                                        <div class="item-row row">
+                                            <div class="cell" width="20%">
+                                                <div>
+                                                    <iron-icon class="small" style="color:darkgray;cursor:pointer" icon="delete" tag="{{item.uuid}}" on-click="onDeleteArticle"></iron-icon>
+                                                </div>
+                                            </div>
+                                            <div class="cell" width="60%" style="text-align:justify"><div>{{item.name}}</div></div>
+                                            <div class="cell" width="20%"><div>{{item.price}}</div></div>
+                                        </div>
+                                    </template>
+                                </div>
+                            </div>
+                            <div>
+                                <table>
+                                    <tfoot>
+                                        <tr>
+                                            <td width="60%">Tax:</td>
+                                            <td><div>{{tab.tax}}</div></td>
+                                        </tr>
+                                        <tr>
+                                            <td>Tip:</td>
+                                            <td><div>{{tab.tip}}</div></td>
+                                        </tr>
+                                        <tr>
+                                            <td>Total:</td>
+                                            <td><div>{{tab.total}}</div></td>
+                                        </tr>
+                                    </tfoot>
+                                </table>
+                            </div>
+                    </div>
+                </paper-material>
+    </template>
+    <script>
+
+        Polymer({
+            is: "guest-check-pos",
+            properties: {
+                DUMMY_ENTRIES: {
+                    type: Array,
+                    readOnly: true,
+                    value: function () { return new Array(50); }
+                },
+                tab: {
+                    type: Object,
+                    notify: true,
+                    observer: 'getBusinessName'
+                },
+                businessName: {
+                    type: String,
+                    notify: true,
+                }
+            },
+            ready: function () {
+            },
+            attached: function () {
+            },
+            getBusinessName: function (tab) {
+                var business = CommonModule.modules.business.get(tab.placeid);
+                if (business)
+                    this.businessName = business.fullname;
+            }
+        });
+
+        var computePrice = function (factor, articles) {
+            var result = Math.round(_.sum(articles, function (item) {
+                return factor * item.price;
+            }) * 10) / 10;
+            if (!result)
+                return "";
+            else
+                return result;
+        }
+
+    </script>
+</dom-module>

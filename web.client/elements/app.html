@@ -1,0 +1,304 @@
+﻿<dom-module id="yummlet-client">
+    <link rel="import" type="css" href="../styles/client-styles.css">
+    <template>
+        <style>
+            paper-icon-button.selected {
+                color: lightgreen;
+            }
+
+            paper-icon-button {
+                width: 39px;
+                height: 39px;
+            }
+        </style>
+        <!--
+        <div id="watermark" class="layout vertical center center-justified">DEMO</div>
+            -->
+        <paper-toast id="toast2">
+            <a id="innerToastLink"></a>
+        </paper-toast>
+        <paper-drawer-panel id="paperDrawerPanel" drawer-width="200px" disable-edge-swipe transition="true">
+            <paper-header-panel drawer>
+                <paper-toolbar id="drawerToolbar" shadow>
+                    <div class="title-bar-fonting">
+                        yummlet
+                        <div class="paper-font-subhead" style="font-size:xx-small">VIEW MENU. ORDER. PAY.</div>
+                    </div>
+                </paper-toolbar>
+                <!-- Menus go here -->
+                <paper-menu class="list" attr-for-selected="data-route" selected="{{route}}">
+                    <template is="dom-repeat" items="{{menuItems}}">
+                        <template is="dom-if" if={{item.sectionHeader}}>
+                            <div class="separator"></div>
+                            <p class="menu-heading">{{item.sectionHeader}}</p>
+                        </template>
+                        <paper-button class="nobutton" data-route="{{item.route}}" on-click="onRouteClick">
+                            <paper-icon-item>
+                                <iron-icon id="{{item.id}}" icon="{{item.icon}}" item-icon></iron-icon>
+                                <paper-badge id="{{item.badgeid}}" for="{{item.id}}" label="{{item.badgeLabel}}" hidden$="{{!item.badgeLabel}}"></paper-badge>
+                                <span>{{item.label}}</span>
+                            </paper-icon-item>
+                        </paper-button>
+                    </template>
+                </paper-menu>
+            </paper-header-panel>
+            <paper-header-panel main shadow="true">
+                <paper-toolbar id="mainToolbar">
+                    <paper-icon-button id="paperToggle" icon="menu" paper-drawer-toggle style="margin-right:0"></paper-icon-button>
+                    <div hidden$="{{!selectedBusiness}}">
+                        <paper-icon-button class="menu-button business-menu-item" data-route='/menus' alt='Menus' icon="chrome-reader-mode" on-click="onBusinessRouteClick"></paper-icon-button>
+                        <paper-icon-button class="gallery-button business-menu-item" data-route='/photos' alt='Photos' icon="image:photo-library" on-click="onBusinessRouteClick"></paper-icon-button>
+                        <paper-icon-button class="review-button business-menu-item" data-route='/reviews' alt='Reviews' icon="maps:rate-review" on-click="onBusinessRouteClick"></paper-icon-button>
+                    </div>
+                    <span class="flex"></span>
+                    <shopping-basket on-click="onRouteClick" data-route="/checkout"></shopping-basket>
+                    <paper-icon-button icon="account-circle" on-click="onRouteClick" data-route="/account" id="accountButton"></paper-icon-button>
+                    <!-- dropping refresh button
+                        <paper-icon-button icon="refresh" on-click="onRefresh"></paper-icon-button>
+                    -->
+                </paper-toolbar>
+                <div class="content">
+                    <cafe-view></cafe-view>
+                </div>
+            </paper-header-panel>
+        </paper-drawer-panel>
+        <!-- Uncomment next block to enable Service Worker support (1/2) -->
+        <!--
+        <paper-toast id="caching-complete"
+                     duration="6000"
+                     text="Caching complete! This app will work offline.">
+        </paper-toast>
+
+        <platinum-sw-register auto-register
+                              clients-claim
+                              skip-waiting
+                              on-service-worker-installed="displayInstalledToast">
+          <platinum-sw-cache default-cache-strategy="fastest"
+                             cache-config-file="cache-config.json">
+          </platinum-sw-cache>
+        </platinum-sw-register>
+        -->
+    </template>
+    <script>
+        Polymer({
+            is: "yummlet-client",
+            properties: {
+                route: {
+                    type: String,
+                    notify: true,
+                    value: function () { return '/open-orders'; }
+                },
+                menuItems: {
+                    type: Array,
+                    notify: true,
+                },
+                businesses: {
+                    type: Array,
+                    notify: true,
+                    reflectToAttribute: true,
+                    value: function () { return []; }
+                },
+                selectedBusiness: {
+                    type: String,
+                    notify: true,
+                    value: function () { return ''; }
+                },
+            },
+            created: function () {
+                window.writeToScreen = function (msg, linkmsg, link) {
+                    this.async(function () {
+                        this.writeToScreen(msg, linkmsg, link);
+                    }.bind(this));
+                }.bind(this);
+                PubSub.subscribe('app.scrollToTop', this.async(function () {
+                    this.scrollPageToTop();
+                }.bind(this)));
+            },
+            ready: function () {
+            },
+            attached: function () {
+                app = this;
+                this.async(function () {
+                    this.menuItems = this.populateMenu();
+                }.bind(this));
+                this.onSessionChange();
+                PubSub.subscribe('User.logged', this.onSessionChange.bind(this));
+
+                //initial businesses update:
+                PubSub.subscribe('Business.received', this.updateBusinesses.bind(this));
+
+                PubSub.subscribe('User.logged.in', this.onLoginSuccess.bind(this));
+                PubSub.publish('App.ready');
+
+                CommonModule.refresh();
+                this.async(function () {
+                    var containers = this.querySelectorAll('#mainContainer');
+                    _.forEach(containers, function (container) {
+                        this.preventScrollingOn_iOS(container);
+                    }.bind(this));
+                }.bind(this));
+            },
+            preventScrollingOn_iOS: function (element) {
+                element.addEventListener('touchstart', function (event) {
+                    this.allowUp = (this.scrollTop > 0);
+                    this.allowDown = (this.scrollTop < this.scrollHeight - this.clientHeight);
+                    this.prevTop = null; this.prevBot = null;
+                    this.lastY = event.touches[0].pageY;
+                });
+
+                element.addEventListener('touchmove', function (event) {
+                    var touch = event.touches[0];
+                    var up = (touch.pageY > this.lastY), down = !up;
+                    this.lastY = touch.pageY;
+
+                    if ((up && this.allowUp) || (down && this.allowDown)) event.stopPropagation();
+                    else if (event.cancelable)
+                        event.preventDefault();
+                });
+            },
+            onLoginSuccess: function () {
+                var name = CommonModule.modules.user.current.profile().name;
+                name = name ? ', ' + name : '';
+                window.writeToScreen('Welcome to yummlet' + name);
+            },
+            writeToScreen: function (msg, link_msg, link) {
+                if (!_.isString(msg)) return;
+                this.$.toast2.text = msg;
+                if (link) {
+                    this.$.toast2.duration = 10000;
+                    this.$.innerToastLink.onclick = function () { page(link); };
+                    this.$.innerToastLink.innerHTML = link_msg;
+                }
+                else {
+                    this.$.toast2.duration = 3000 + msg.length * 50;
+                    this.$.innerToastLink.innerHTML = "";
+                }
+                this.$.toast2.show();
+            },
+            closeToast: function () {
+                this.$.toast2.hide();
+            },
+            onSessionChange: function () {
+                var color = CommonModule.modules.user.current.is() ? 'green' : 'white';
+                this.$.accountButton.style.color = color;
+            },
+            updateBusinesses: function (msg, business) {
+                var index = _.findIndex(this.businesses, function (b) { return b.placeid == business.placeid; });
+                if (index < 0)
+                    this.push('businesses', business);
+                else
+                    this.splice('businesses', index, 1, business);
+            },
+            displayInstalledToast: function () {
+                // Check to make sure caching is actually enabled—it won't be in the dev environment.
+                if (!document.querySelector('platinum-sw-cache').disabled) {
+                    document.querySelector('#caching-complete').show();
+                }
+            },
+            isBusinessSelected: function (placeName) {
+                return !!this.placeName;
+            },
+            // Close drawer after menu item is selected if drawerPanel is narrow
+            onDataRouteClick: function (event) {
+                var drawerPanel = document.querySelector('#paperDrawerPanel');
+                if (drawerPanel.narrow && (!event || !event.leaveDrawerOpen)) {
+                    drawerPanel.closeDrawer();
+                }
+            },
+
+            // Scroll page to top and expand header
+            scrollPageToTop: function () {
+                var headerPanel = document.querySelector('paper-header-panel[main]');
+                if (headerPanel) {
+                    headerPanel.$.mainContainer.scrollTop = 0;
+                }
+            },
+            onRefresh: function () {
+                CommonModule.refresh();
+            },
+            onRouteClick: function (event) {
+                var route, leaveDrawerOpen;
+                if (event.model && event.model.business)
+                    route = event.model.business.locals.route;
+                else if (event.model && event.model.item) {
+                    route = event.model.item.route;
+                    leaveDrawerOpen = event.model.item.leaveDrawerOpen;
+                }
+                else
+                    route = event.currentTarget.attributes['data-route'].nodeValue;
+                leaveDrawerOpen = leaveDrawerOpen || event.currentTarget.attributes['data-leave-drawer-open']
+                this.onRouteClickAux(route, leaveDrawerOpen);
+            },
+            onBusinessRouteClick: function (event) {
+                var target = event.currentTarget;
+                CommonModule.modules.business.getBusinessUrl(function (url) {
+                    if (!url)
+                        return;
+
+                    page(url + target.attributes['data-route'].nodeValue);
+                }.bind(this));
+            },
+            setBusinessRouteStyle: function (sectionName) {
+                sectionName = '/' + sectionName;
+                var buttons = this.querySelectorAll('paper-icon-button[class~="business-menu-item"]');
+                _.forEach(buttons, function (button) {
+                    var current = button.attributes['data-route'].nodeValue === sectionName;
+                    button.disabled = current;
+                    this.toggleClass('selected', current, button);
+                }.bind(this));
+            },
+            onRouteClickAux: function (route, leaveDrawerOpen) {
+                this.onDataRouteClick({ leaveDrawerOpen: leaveDrawerOpen });
+                page(route);
+            },
+            populateMenu: function () {
+                return [
+                    {
+                        label: 'Places',
+                        id: 'places',
+                        route: '/places',
+                        icon: 'maps:place',
+                    },
+                    {
+                        label: 'Coupons',
+                        id: 'membership',
+                        route: '/membership',
+                        icon: 'card-membership',
+                    },
+                    {
+                        label: 'Checkout',
+                        id: 'checkout',
+                        route: '/checkout',
+                        icon: 'credit-card',
+                    },
+               {
+                   label: 'Open orders',
+                   id: 'openorders',
+                   route: '/menus',
+                   icon: 'receipt',
+                   sectionHeader: ' ',
+               },
+               {
+                   label: 'Past orders',
+                   id: 'pastorders',
+                   route: '/past-orders',
+                   icon: 'history',
+               },
+
+               {
+                   label: 'Settings',
+                   id: 'settings',
+                   route: '/settings',
+                   icon: 'settings',
+                   sectionHeader: ' ',
+               },
+                {
+                    label: 'Account',
+                    id: 'account',
+                    route: '/account',
+                    icon: 'account-circle',
+                }];
+            }
+        });
+    </script>
+</dom-module>

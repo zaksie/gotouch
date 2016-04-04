@@ -1,0 +1,32 @@
+﻿
+<dom-module id="fast-checkout-button">
+
+    <template>
+        <link rel="import" type="css" href="../../web.common/styles/shared-by-elements.css">
+
+        <style>
+        </style>
+            <paper-material id="fastCheckout" style="display:block" elevation="1">
+                <div id="yellowBG" style="position:absolute; width:100%; left:0; top:0; margin:0; height:100%; background-color:rgba(255,255,102,0.4)"></div>
+                <div class="fjalla-caption">SKIP REGISTRATION</div>
+                <paper-button class="pay-button yellow-300" raised on-click="onSkipRegistration">PAY NOW</paper-button>
+            </paper-material>
+    </template>
+    <script>
+
+        Polymer({
+            is: "fast-checkout-button",
+            properties: {
+            },
+
+            ready: function () {
+            },
+            attached: function () {
+            },
+            onSkipRegistration: function () {
+                page('/checkout');
+            }
+        });
+
+    </script>
+</dom-module>

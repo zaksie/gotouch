@@ -1,0 +1,110 @@
+﻿
+
+<dom-module id="credit-card-form">
+
+    <template>
+        <link rel="import" type="css" href="../../web.common/styles/shared-by-elements.css">
+        <style>
+            paper-button#paypal-button {
+                display: block;
+                background-image: url("/public/images/cc-button.png");
+                background-size: 100% 100%;
+                width: 270px;
+                height: 54px;
+                padding: 0;
+                margin: 10px auto;
+            }
+            paper-badge{
+                --paper-badge-background: gray;
+                --paper-badge-opacity: 0.8;
+                --paper-badge-text-color: red;
+                z-index: 1;
+                cursor:pointer;
+            }
+            paper-spinner#spinner{
+                position:absolute;
+                left:0;
+                right:0;
+                margin:auto;
+            }
+        </style>
+        <div class="layout vertical center" style="margin-bottom:20px">
+                <form is="iron-form" id="cc" method="post" action="/payments/cc"
+                      with-credentials
+                      on-iron-form-response="onResponse"
+                      on-iron-form-error="onError"
+                      class="hidden-animation">
+                    <paper-badge for="cc-container" label="X" disabled="{{processing}}" on-click="onCloseForm"></paper-badge>
+                    <div id="cc-container">
+                        <div class="fjalla-caption">PAY</div>
+                        <paper-input name="name" label="Name"></paper-input>
+                        <paper-input name="id" error-message="Only digits allowed" auto-validate pattern="[0-9]*" prevent-invalid-input label="ID"></paper-input>
+                        <gold-cc-input prevent-invalid-input label="CC"></gold-cc-input>
+                        <div class="layout horizontal">
+                            <gold-cc-expiration-input auto-validate prevent-invalid-input label="Expiry date"></gold-cc-expiration-input>
+                            <div style="min-width:30px; min-height:20px;"></div>
+                            <gold-cc-cvc-input auto-validate prevent-invalid-input label="CVC"></gold-cc-cvc-input>
+                        </div>
+                        <br />
+                        <input type="hidden" name="tab" id="tabPlaceholder" />
+                        <paper-button class="yellow-300" style="display:block" raised on-click="onCCSubmit">
+                            <div class="layout horizontal around-justified">
+                                <iron-icon icon="lock" style="margin-left:30px"></iron-icon>
+                                <span style="margin-right:30px">Order</span>
+                            </div>
+                            <paper-spinner id="spinner" hidden="{{!processing}}" active></paper-spinner>
+                        </paper-button>
+                    </div>
+                </form>
+        </div>
+        <paper-toast id="toast2" text="{{toastText}}"></paper-toast>
+    </template>
+    <script>
+        Polymer({
+            is: "credit-card-form",
+            properties: {
+                processing: {
+                    type: Boolean,
+                    notify: true,
+                    value: function () { return false; },
+                },
+                toastText: {
+                    type: String,
+                    notify: true
+                }
+            },
+            ready: function () {
+            },
+            attached: function(){
+            },
+            onCCSubmit: function () {
+                var tab = CommonModule.modules.tab.current.get();
+                this.$.tabPlaceholder.value = JSON.stringify(tab);
+                if (this.$.cc.validate()) {
+                    this.processing = true;
+                    this.$.cc.submit();
+                }
+            },
+            onCloseForm: function () {
+                this.$.cc.reset();
+                this.fire('close');
+            },
+            getState: function(processing, enabled){
+                var disabled = processing;
+                if (disabled)
+                    this.$['paypal-button'].style.backgroundImage = 'url("/public/images/cc-button-disabled.png")';
+                else
+                    this.$['paypal-button'].style.backgroundImage = 'url("/public/images/cc-button.png")';
+                return disabled;
+            },
+            onResponse: function (status) {
+                if (status == 200)
+                    page('/order');
+            },
+            onError: function (status) {
+                this.toastText = "Card validation failed. Perhaps try another card.";
+                this.$.toast2.show();
+            }
+        });
+    </script>
+</dom-module>

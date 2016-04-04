@@ -1,0 +1,46 @@
+﻿
+
+<dom-module id="article-details">
+    <template>
+        <link rel="import" type="css" href="../../web.common/styles/shared-by-elements.css">
+
+        <style>
+        </style>
+        <div class="layout horizontal center-justified">
+            <paper-button raised class="smaller-button blue-300" animated on-click="onAddToOrder">
+                <iron-icon icon="add-shopping-cart"></iron-icon>
+                Add to order
+            </paper-button>
+            <paper-button raised class="smaller-button" style="background:lightgray"  animated on-click="onBackClick">BACK</paper-button>
+        </div>
+    </template>
+    <script>
+        
+        Polymer({
+            is: "article-details",
+            properties: {
+                article: {
+                    type: Object,
+                    notify: true,
+                },
+            },
+            ready: function () {
+            },
+            onAddToOrder: function () {
+                this.addToOrder();
+            },
+            addToOrder: function () {
+                CommonModule.modules.tab.addArticle(this.article);
+                this.fire('animate');
+            },
+            onConfirmNewTabClosed: function(event){
+                if (this.$.confirmNewTab.closingReason.confirmed)
+                    this.addToOrder();
+
+            },
+            onBackClick: function () {
+                this.fire('section-back-click');
+            },
+        });
+    </script>
+</dom-module>

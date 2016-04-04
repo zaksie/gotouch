@@ -1,0 +1,91 @@
+<!--
+Copyright (c) 2015 The Polymer Project Authors. All rights reserved.
+This code may only be used under the BSD style license found at http://polymer.github.io/LICENSE.txt
+The complete set of authors may be found at http://polymer.github.io/AUTHORS.txt
+The complete set of contributors may be found at http://polymer.github.io/CONTRIBUTORS.txt
+Code distributed by Google as part of the polymer project is also
+subject to an additional IP rights grant found at http://polymer.github.io/PATENTS.txt
+-->
+<script src="/public/js/jquery.fullpage.min.js"></script>
+<script src="/public/js/slimscroll.js"></script>
+
+<dom-module id="item-sections-fullpage">
+    <link rel="import" type="css" href="../styles/shared-by-elements.css">
+    <link rel="import" type="css" href="../styles/bouncing-updown.css">
+    <link rel="import" href="../../public/css/jquery.fullpage.min.css">
+    <style>
+        :host {
+            display: block;
+        }
+
+        .fixed {
+            position: fixed;
+            height: 100%;
+            width: 100%;
+        }
+
+        @media (min-width:601) {
+        }
+        .section {
+            text-align: center;
+        }
+    </style>
+    <template>
+        <div class="control-icons fullbleed layout horizontal ">
+            <paper-fab id="backButton" class="backbutton blue-300" mini icon="arrow-back" on-click="onBackClick"></paper-fab>
+            <div id="arrow" class="flex arrow bounce"></div>
+        </div>
+        <div id="scrollablePage" class="fullbleed layout fixed">
+            <div id="fullpage">
+                <div class="section " id="section0">
+                    <menu-section business="{{business}}"></menu-section>
+                </div>
+                <div class="section" id="section1">
+                    <paper-material animated="true" elevation="1" class="menu">
+                        <h1>Text 2</h1>
+                    </paper-material>
+                </div>
+                <div class="section" id="section2">
+                    <paper-material animated="true" elevation="1" class="menu">
+                        <h1>Text 3</h1>
+                    </paper-material>
+                </div>
+            </div>
+        </div>
+    </template>
+</dom-module>
+<script>
+
+    Polymer({
+
+        is: 'item-sections-fullpage',
+
+        behaviors: [
+          Polymer.NeonAnimatableBehavior
+        ],
+
+        properties: {
+
+            business: {
+                type: Object,
+                notify: true,
+                value: { menus: [] }
+            },
+            prevWindow: {
+                type: Number,
+                readOnly: true,
+                value: function () { return GRID_PAGE; }
+            }
+        },
+        attached: function () {
+
+            var root = this.$['fullpage'];
+            $(root).fullpage({});
+        },
+
+        onBackClick: function (event) {
+            this.fire('back-click', event);
+        }
+
+    });
+</script>

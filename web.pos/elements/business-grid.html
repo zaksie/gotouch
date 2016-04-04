@@ -1,0 +1,99 @@
+﻿<dom-module id="business-grid">
+    <template>
+        <link rel="import" type="css" href="../../web.common/styles/shared-by-elements.css">
+        <link rel="import" type="css" href="../../web.common/styles/business-grid.css">
+        <style>
+            div:empty {
+                height: 0;
+                min-height: 0;
+                padding: 0;
+                margin-top: 0;
+                margin-bottom: 0;
+                border: none;
+            }
+            .big-grid-item{
+                min-width: 250px;
+                width: 250px;
+                max-width: 350px;
+                min-height: 315px;
+                height: 315px;
+                max-height: 330px;
+                -ms-flex: 1 1 250px !important;
+                -webkit-flex: 1 1 250px !important;
+                flex: 1 1 250px !important;
+            }
+            paper-card#container{
+                --paper-card-header-image: {
+                    height: 265px;
+                    --iron-image-height: 100%;
+                }
+            }
+        </style>
+                <div class="grid center center-justified">
+                    <template is="dom-repeat" items="{{businesses}}" as="business">
+                        <paper-card id="container" class="grid-item big-grid-item" heading="{{getName(business)}}"
+                                    on-click="_onClick" on-mouseover="onMouseOverCard" on-mouseout="onMouseOutOfCard"
+                                    image="{{business.photo.thumbnail}}" animated-shadow elevation=1>
+                            <div class="card-content" style="text-align:justify; font-size:xx-small; margin:0; padding: 2px">
+                            </div>
+                            <div class="card-actions" style="margin:0; padding: 0; max-height:40px" hidden$="{{hideActions}}">
+                                <paper-icon-button icon="favorite" toggles="true" title="mark as favorite" active="true"></paper-icon-button>
+                                <paper-icon-button icon="bookmark" title="bookmark for later" active="false"></paper-icon-button>
+                            </div>
+                        </paper-card>
+                    </template>
+                    <template is="dom-repeat" items="{{PLACEHOLDERS}}">
+                        <div class="grid-item big-grid-item"></div>
+                    </template>
+                </div>
+    </template>
+    <script>
+
+        var businessHashTable = {}
+        Polymer({
+
+            is: 'business-grid',
+
+            properties: {
+
+                businesses: {
+                    type: Array,
+                    notify: true,
+                    reflectToAttribute: true,
+                    value: function () { return []; }
+
+                },
+                PLACEHOLDERS: {
+                    type: Array,
+                    notify: true,
+                    value: function () { return new Array(20); }
+                }
+
+            },
+            ready: function () {
+            },
+            attached: function () {
+            },
+            getName: function (business) {
+                return business.fullname;
+            },
+            onMouseOverCard: function (event) {
+                event.currentTarget.attributes.elevation.value = CARD_HOVER_ELEVATION;
+            },
+            onMouseOutOfCard: function (event) {
+                event.currentTarget.attributes.elevation.value = CARD_ELEVATION;
+            },
+            _onClick: function (event) {
+                var target = event.target;
+                if (target.nodeName == "PAPER-ICON-BUTTON" || target.nodeName == "PAPER-RIPPLE")
+                    return;
+                while (target !== this && !target._templateInstance) {
+                    target = target.parentNode;
+                }
+
+                var business = event.model.item
+                page('/businesses/' + business.placeid);
+            },
+        });
+    </script>
+</dom-module>

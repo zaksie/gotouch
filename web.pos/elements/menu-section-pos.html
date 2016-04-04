@@ -1,0 +1,131 @@
+<!--
+Copyright (c) 2015 The Polymer Project Authors. All rights reserved.
+This code may only be used under the BSD style license found at http://polymer.github.io/LICENSE.txt
+The complete set of authors may be found at http://polymer.github.io/AUTHORS.txt
+The complete set of contributors may be found at http://polymer.github.io/CONTRIBUTORS.txt
+Code distributed by Google as part of the polymer project is also
+subject to an additional IP rights grant found at http://polymer.github.io/PATENTS.txt
+-->
+
+
+<dom-module id="menu-section-pos">
+
+    <template>
+        <link rel="import" type="css" href="../../web.common/styles/shared-by-elements.css">
+        <link rel="import" type="css" href="../../web.common/styles/menu-section.css">
+        <link rel="import" type="css" href="../../web.common/styles/image-gallery-css3d.css">
+        <style>
+            :host {
+                display: block;
+                text-align: center;
+            }
+
+            paper-button {
+                display: inline;
+                max-width: 50vw;
+            }
+
+            .business-name {
+                font-size: xx-small;
+                text-transform: uppercase;
+                font-stretch: extra-expanded;
+            }
+
+            .page-caption {
+                height: 100%;
+                z-index: -1;
+            }
+
+            .business-color {
+                top: 130px;
+                left: 10px;
+                width: 20px;
+                height: 20px;
+                opacity: 0.5;
+                margin: auto;
+            }
+
+            .add-menu-button {
+                box-shadow: 0 0 5px rgba(81, 203, 238, 1) !important;
+                border: 2px solid rgba(81, 203, 238, 1) !important;
+                background: url("/public/images/add_menu.png");
+                background-size: 100% 100%;
+                left: 40%;
+            }
+        </style>
+            <template is="dom-repeat" items="{{businesses}}" as="business" index-as="businessIndex">
+                <div id="{{business.placeid}}" class="layout vertical center" style="position:relative; margin:50px 0">
+                    <div style="position:absolute">
+                        <paper-fab class="business-color" mini style$="{{getBusinessStyle(business)}}"></paper-fab>
+                    </div>
+                    <div id="stage" style="margin-top:10vh; width:90%; max-width:600px; height:130px;position:relative">
+                        <template is="dom-repeat" items="{{business.menus}}" as="menu">
+                            <div class="menu-image css3d glossy hidden-animation"
+                                 style$="{{getStyle(businessIndex, index,menu.pages.0.thumbnail, menu)}}" on-click="onMenuClick"></div>
+                        </template>
+                        <div class="menu-image css3d glossy hidden-animation add-menu-button"
+                             style$="{{getStyle(businessIndex, business.menus.length, 0)}}" on-click="onAddMenuClick">
+                        </div>
+                    </div>
+                    <img id="shelfImage" src="/public/images/table.png" style="width:90%; max-width:600px; z-index:auto" />
+                    <span class="business-name">{{business.fullname}}</span>
+                </div>
+            </template>
+    </template>
+    <script>
+        Polymer({
+
+            is: 'menu-section-pos',
+            properties: {
+                businesses: {
+                    type: Array,
+                    notify: true,
+                    reflectToAttribute: true,
+                },
+                business: {
+                    type: Object,
+                    notify: true,
+                    reflectToAttribute: true,
+                    observer: 'onBusinessChange'
+                }
+            },
+            ready: function () {
+            },
+            attached: function () {
+            },
+            getStyle: function (businessIndex, index, imgsrc) {
+                if (!this.businesses[businessIndex] || !this.businesses[businessIndex].menus) return;
+                var itemCount = this.businesses[businessIndex].menus.length + 1;
+                var parentWidth = Math.min(document.querySelector('#mainContainer').clientWidth*0.9, 600);
+                var v = CommonModule.modules.menu.visual.getMenuSectionItemPosition(parentWidth, itemCount, index);
+                if (imgsrc)
+                    v += 'background: url("' + imgsrc + '"); background-size: cover;';
+                return v;
+            },
+            onBusinessChange: function () {
+                if (this.business.placeid)
+                    this.scrollTo(this.business.placeid);
+            },
+            onMenuClick: function (event) {
+                if (event.model.menu.loading)
+                    return window.writeToScreen('Menu processing is ongoing...');
+                var placeid = this.businesses[event.model.businessIndex].placeid;
+                page('/menus/' + placeid + '/' + event.model.menu.name);
+            },
+            getBusinessStyle: function (business) {
+                return 'background-color: ' + business.locals.color;
+            },
+            onAddMenuClick: function (event) {
+                page('/menus/' + event.model.business.placeid + '/add');
+            },
+            scrollTo: function (placeid) {
+                setTimeout(function () {
+                    $('#mainContainer').animate({
+                        scrollTop: $('#' + placeid).offset().top
+                    }, 1000);
+                }.bind(this), 250);
+            }
+        });
+
+    </script>
+</dom-module>

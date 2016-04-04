@@ -1,0 +1,36 @@
+﻿<link rel="import" href="business-grid.html">
+
+<dom-module id="business-view">
+    <template>
+        <link rel="import" type="css" href="../../web.common/styles/shared-by-elements.css">
+        <style>
+        </style>
+        <business-grid businesses="{{businesses}}"></business-grid>
+    </template>
+    <script>
+        Polymer({
+
+            is: 'business-view',
+
+            properties: {
+                selected: {
+                    type: Number,
+                    notify: true,
+                    value: function () { return 0; }
+                },
+                businesses: {
+                    type: Array,
+                    notify: true,
+                    reflectToAttribute: true,
+                    value: function () { return []; }
+
+                }
+            },
+            ready: function () {
+            },
+            attached: function () {
+            },
+        });
+
+    </script>
+</dom-module>

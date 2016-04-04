@@ -1,0 +1,226 @@
+body {
+  background: #fafafa;
+  font-family: 'Roboto', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  color: #333;
+}
+
+a{
+    color:cornflowerblue;
+}
+a:link, a:visited , a:active, a:hover {
+    cursor:pointer;
+    text-decoration: none;
+    color: blue;
+}
+div.full{
+    width:100%;
+}
+.nobutton{
+    padding:0;
+    text-transform:none;
+    font-size:0.8em;
+    background:none;
+    elevation:0;
+    text-align:left;
+    display:block;
+    width:100%;
+}
+
+.nobutton paper-icon-item{
+    margin:0;
+    padding-left: 10px;
+}
+.nopadding{
+    padding:0;
+    margin:0;
+}
+paper-button {
+    display: block;
+    margin: 10px;
+    font-size:0.9em;
+    background-size: contain;
+}
+paper-toast{
+    z-index:20;
+}
+
+.separator {
+    width: 100%;
+    margin: 5px 5px;
+    height: 5px;
+    background: url("/public/images/separator.jpg") no-repeat;
+    background-size: 100%;
+}
+
+::-webkit-scrollbar {
+    width: 6px;
+}
+ 
+::-webkit-scrollbar-track {
+    -webkit-box-shadow: inset 0 0 3px rgba(0,0,0,0.3);
+    border-radius: 4px;
+}
+ 
+::-webkit-scrollbar-thumb {
+    border-radius: 4px;
+    -webkit-box-shadow: inset 0 0 3px rgba(0,0,0,0.5);
+}
+
+.caption {
+    font-family: 'Fjalla One', sans-serif;
+    font-stretch: ultra-expanded;
+    font-size: large;
+    text-align: center;
+}
+
+
+.menu-navigation {
+    position: relative;
+    top: -10px;
+    color: white;
+}
+
+@media (min-width:641px) {
+    .control-icons {
+        left: 220px;
+    }
+}
+
+
+
+paper-button.checkout-button {
+    padding: 3px;
+    display: block;
+    width: 100%;
+    font-stretch: expanded;
+    left: 0;
+    right: 0;
+    margin: auto;
+}
+
+paper-button.standard {
+    position:relative;
+    display: block;
+    width: 100%;
+    left:0;
+    right:0;
+    margin: auto;
+}
+
+
+.smaller-button {
+ /*   padding-top: 2px;
+    padding-bottom: 2px;
+    max-height: 32px;
+     */
+}
+
+.onload-opacity {
+    opacity: 0;
+    -moz-transition: opacity 0.5s linear;
+    -o-transition: opacity 0.5s linear;
+    -webkit-transition: opacity 0.5s linear;
+    transition: opacity 0.5s linear;
+}
+
+paper-spinner {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    margin: auto;
+    max-width: 32px;
+    max-height: 32px;
+    layer-1-color: var(--paper-light-blue-500);
+    layer-2-color: var(--paper-light-blue-500);
+    layer-3-color: var(--paper-light-blue-500);
+    layer-4-color: var(--paper-light-blue-500);
+}
+
+paper-slider {
+    --paper-slider-active-color: whitesmoke;
+}
+
+.divider {
+    opacity: 0.5;
+    color: #ccc;
+    width: 95%;
+    margin: 10px auto;
+    overflow: hidden;
+    text-align: center;
+    line-height: 0.8em;
+}
+
+    .divider:before, .divider:after {
+        content: "";
+        vertical-align: top;
+        display: inline-block;
+        width: 50%;
+        height: 0.45em;
+        border-bottom: 1px solid #ccc;
+        margin: 0 2% 0 -55%;
+    }
+
+    .divider:after {
+        margin: 0 -55% 0 2%;
+    }
+
+.fjalla-caption {
+    font-family: 'Fjalla One', sans-serif;
+    font-stretch: expanded;
+    font-size: x-large;
+    text-align: center;
+    opacity:0.6;
+}
+
+.circular-avatar-big {
+    width: 250px;
+    height: 250px;
+    -webkit-border-radius: 50%;
+    -moz-border-radius: 50%;
+    border-radius: 50%;
+    box-shadow: 5px 5px 2.5px #888888;
+}
+
+.circular-avatar-small, .circular-avatar-xsmall, .circular-avatar-xxsmall  {
+    min-width: 80px;
+    min-height: 80px;
+    max-width: 80px;
+    max-height: 80px;
+    -webkit-border-radius: 50%;
+    -moz-border-radius: 50%;
+    border-radius: 50%;
+    box-shadow: 3px 3px 1.5px #888888;
+}
+
+.circular-avatar-xsmall{
+    min-width: 40px;
+    min-height: 40px;
+    max-width: 40px;
+    max-height: 40px;
+}
+
+.circular-avatar-xxsmall{
+    min-width: 25px;
+    min-height: 25px;
+    max-width: 25px;
+    max-height: 25px;
+}
+
+.rectangular-avatar-medium {
+    min-width: 135px;
+    min-height: 160px;
+    max-width: 135px;
+    max-height: 160px;
+    margin:10px;
+    -webkit-border-radius: 10%;
+    -moz-border-radius: 10%;
+    border-radius: 10%;
+    box-shadow: 5px 5px 2.5px #888888;
+}
+
+#drawerToolbar{
+    z-index:2 !important;
+}
+
